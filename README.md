@@ -22,6 +22,12 @@ You then have to create a virtual environment named `rl` :
 
 Then, you can cd to the `from-a-to-b-with-rl` folder, and check if it is activated.
 
+If the virtual environment is not activated automatically upon entering the folder you can run:
+
+```
+  pyenv local rl
+````
+
 ### Packages
 
 The `rl` virtual environment has a few dependencies, notably :
