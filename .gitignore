@@ -1,4 +1,4 @@
 .env
 .envrc
 *.egg-info
-.mp4
+*.mp4
