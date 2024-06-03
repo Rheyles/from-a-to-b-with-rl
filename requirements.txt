@@ -3,3 +3,4 @@ torch
 gymnasium
 pygame
 moviepy
+matplotlib
