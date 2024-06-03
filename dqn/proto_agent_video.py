@@ -7,6 +7,9 @@ while filming not in ['y','n']:
 
 if filming == 'y':
     render_mode = "rgb_array_list"
+    video_dir = 'vidcap'
+    if not os.path.exists(video_dir):
+        os.makedirs(video_dir)
 else:
     render_mode = "human"
 
