@@ -36,6 +36,7 @@ The `rl` virtual environment has a few dependencies, notably :
 - [numpy](https://numpy.org/) to handle a few numerical outputs
 - [gymnasium](https://gymnasium.farama.org/)
 - [pygame](https://www.pygame.org/news)
+- [moviepy](https://pypi.org/project/moviepy/) to save video from the agent interacting with the environment
 
 You can then decide to install the package itself (XXX
 Note, for now, nothing interesting is installed except from the dependencies XXX):
