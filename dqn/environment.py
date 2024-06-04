@@ -8,7 +8,7 @@ class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
         self.env = env_gym
 
-    def run_episode(self, agent) -> None:
+    def run_episode(self, agent) -> int:
         """
         Runs a single episode of the environment using the provided agent.
         Store transition in memory and move to the next state.
@@ -32,7 +32,7 @@ class Environment():
                 next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
 
             # Store the transition in memory
-            agent.memory_push(state, action, next_state, reward)
+            agent.update_memory(state, action, next_state, reward)
 
             # Move to the next state
             state = next_state
@@ -42,9 +42,11 @@ class Environment():
 
             # Soft update of the target network's weights
             # θ′ ← τ θ + (1 −τ )θ′
-            agent.soft_update_target()
+            agent.soft_update_agent()
 
             if done:
                 break
 
         print('Complete')
+
+        return t

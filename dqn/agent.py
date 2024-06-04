@@ -18,7 +18,7 @@ from buffer import ReplayMemory, Transition
 class SuperAgent():
     def __init__(self) -> None:
         pass
-    def select_action()-> gym.ActType:
+    def select_action()-> torch.Tensor:
         pass
     def optimize_model() -> list:
         pass
@@ -35,30 +35,30 @@ class DQNAgent():
         self.policy_net = DQN(x_dim, y_dim)
         self.target_net = DQN(x_dim, y_dim)
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=LR)
-        self.memory = ReplayMemory(10000)
-        self.loss = []
-        self.rewards = []
+        self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
+        self.memory = ReplayMemory(MEM_SIZE)
+        self.steps_done = 0
+        self.losses = []
+        self.rewards = 0
 
-    def select_action(self, act_space, state: gym.ObsType) -> gym.ActType:
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
         The chances of picking a random action are high in the beginning and decrease with number of iterations
 
         Args:
-            act_space : XXXXXX
+            act_space : Action space of environment
             state (gym.ObsType): Observation
 
         Returns:
             act ActType : Action that the agent performs
         """
 
-        global steps_done
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-            exp(-steps_done / EPS_DECAY)
-        steps_done += 1
+            exp(-self.steps_done / EPS_DECAY)
+        self.steps_done+=1 #Update the number of steps within one episode
         if sample > eps_threshold:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
@@ -69,10 +69,10 @@ class DQNAgent():
                 result = self.policy_net(state)
                 return result.max(0).indices.view(1, 1)
         else:
-            return torch.tensor([[self.env.action_space.sample()]], device=DEVICE, dtype=torch.long)
+            return torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
 
 
-    def optimize_model(self):
+    def optimize_model(self) -> list:
         """
 
         This function runs the optimization of the model:
@@ -132,7 +132,7 @@ class DQNAgent():
         expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
         # Compute Huber loss
-        criterion = nn.MSELoss()
+        criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
         print(f"Loss: {float(loss)}")
         print(f'Reward in batch:  {reward_batch.sum()}')
@@ -151,6 +151,7 @@ class DQNAgent():
 
     def update_memory(self, state, action, next_state, reward):
         self.memory.push(state, action, next_state, reward)
+        self.rewards += reward
 
     def soft_update_agent(self):
         """
