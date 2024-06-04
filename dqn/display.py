@@ -1,23 +1,49 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import typing
 import sys
 
 
-def plot_loss(losses, show_result=False):
-    """ Plots the loss function as a function of time"""
+class Plotter():
 
     plt.ion()
-    plt.figure(1)
-    if show_result:
-        plt.title('Result')
-    else:
-        plt.clf()
-        plt.title('Training...')
-    plt.xlabel('Step')
-    plt.ylabel('Loss')
-    plt.plot(losses)
+    fig_data_list = []
 
-    plt.pause(0.001)  # pause a bit so that plots are updated
+    @classmethod
+    def plot_data_gradually(cls, data_name: str, data: list[float,int],
+                            show_result: bool=False) -> None:
+        """
+        Plots gradually the data as a function of time. Each data is plotted in
+        its own figure
+        ex : Plotter().plot_data_gradually(data,data_name)
+
+        Args:
+            data_name (str): the name of the data you want to plot
+            data (list[float,int]): the data you want to plot
+            show_result (bool, optional): true if the data won't change anymore.
+                                          Defaults to False.
+        """
+
+        # We get the correct Figure object
+        if data_name not in cls.fig_data_list:
+            cls.fig_data_list.append(data_name)
+            plt.figure(len(cls.fig_data_list))
+        else:
+            plt.figure(cls.fig_data_list.index(data_name) + 1)
+
+        if show_result:
+            plt.title('Result')
+        else:
+            plt.clf()
+            plt.title('Training...')
+        plt.xlabel('Step')
+        plt.ylabel(data_name)
+        plt.plot(data)
+
+        plt.pause(0.001)  # pause a bit so that plots are updated
+
+        if show_result:
+            plt.show()
 
 
 def pretty_print(arrays : tuple, transpose=False, names=None):
@@ -54,8 +80,19 @@ def pretty_print(arrays : tuple, transpose=False, names=None):
 
 
 if __name__ == '__main__':
-    import numpy as np
+    # import numpy as np
 
-    x = np.random.uniform(size=(4,10))
-    y = np.random.uniform(size=(4,10))
-    pretty_print((x,y), names=('fake x', 'real x'))
+    # x = np.random.uniform(size=(4,10))
+    # y = np.random.uniform(size=(4,10))
+    # pretty_print((x,y), names=('fake x', 'real x'))
+
+    data = []
+    data_2 = []
+    for i in range(50):
+        data.append(i**2)
+        data_2.append(i+1)
+        Plotter().plot_data_gradually('Test', data)
+        Plotter().plot_data_gradually('Toto', data_2)
+    data.append(i**2)
+    Plotter().plot_data_gradually('Test', data, show_result=True)
+    Plotter().plot_data_gradually('Toto', data_2, show_result=True)
