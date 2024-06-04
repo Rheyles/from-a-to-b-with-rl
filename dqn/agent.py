@@ -7,6 +7,9 @@ import random
 import typing
 
 import gymnasium as gym
+from datetime import datetime
+import json
+import os
 
 from params import *
 from network import DQN
@@ -32,20 +35,20 @@ class DQNAgent():
         self.policy_net = DQN(x_dim, y_dim)
         self.target_net = DQN(x_dim, y_dim)
 
-        self.opt = torch.optim.Adam(self.net.parameters(), lr=LR)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=LR)
         self.memory = ReplayMemory(10000)
         self.loss = []
         self.rewards = []
 
-    def select_action(self, act_space, state: gym.ObsType, device=DEVICE) -> gym.ActType:
+    def select_action(self, act_space, state: gym.ObsType) -> gym.ActType:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
         The chances of picking a random action are high in the beginning and decrease with number of iterations
 
         Args:
+            act_space : XXXXXX
             state (gym.ObsType): Observation
-            device (_type_, optional): Device to run computations on. Defaults to DEVICE.
 
         Returns:
             act ActType : Action that the agent performs
@@ -66,10 +69,10 @@ class DQNAgent():
                 result = self.policy_net(state)
                 return result.max(0).indices.view(1, 1)
         else:
-            return torch.tensor([[self.env.action_space.sample()]], device=device, dtype=torch.long)
+            return torch.tensor([[self.env.action_space.sample()]], device=DEVICE, dtype=torch.long)
 
 
-    def optimize_model(self, device = DEVICE) -> list:
+    def optimize_model(self):
         """
 
         This function runs the optimization of the model:
@@ -84,8 +87,7 @@ class DQNAgent():
             losses (list): Calculated Loss
         """
 
-        if len(self.memory) < BATCH_SIZE:
-            return
+        if len(self.memory) < BATCH_SIZE: return 0
 
         transitions = self.memory.sample(BATCH_SIZE)
 
@@ -99,9 +101,10 @@ class DQNAgent():
         # (a final state would've been the one after which simulation ended)
 
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=device, dtype=torch.bool)
+                                            batch.next_state)), device=DEVICE, dtype=torch.bool)
         non_final_next_states = torch.cat([s for s in batch.next_state
                                                     if s is not None])
+
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
@@ -119,7 +122,8 @@ class DQNAgent():
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
 
-        next_state_values = torch.zeros(BATCH_SIZE, device=device)
+        next_state_values = torch.zeros(BATCH_SIZE, device=DEVICE)
+
         with torch.no_grad():
             result = self.target_net(non_final_next_states.unsqueeze(-1))
             next_state_values[non_final_mask] = result.max(1).values
@@ -145,11 +149,35 @@ class DQNAgent():
 
         return self.losses
 
-def update_memory():
-    pass
-def soft_update_agent():
-    pass
-def save_model():
-    pass
-def load_model():
-    pass
+    def update_memory(self, state, action, next_state, reward):
+        self.memory.push(state, action, next_state, reward)
+
+    def soft_update_agent(self):
+        """
+        Performs a soft update of the agent's networks: i.e. updates the weights of the target net according to the changes
+        observed in the policy net. In initial code, updated at every episode
+        """
+        # Soft update of the target network's weights
+        # θ′ ← τ θ + (1 −τ )θ′
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+        self.target_net.load_state_dict(target_net_state_dict)
+
+    def save_model(self, path='model/'):
+        my_date = datetime.strftime(datetime.now(), "%m%d_%h%")
+        os.makedirs(path + my_date, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), 'models/' + my_date + '/policy.model')
+        torch.save(self.target_net.state_dict(), 'models/' + my_date + '/target.model')
+
+        with open(...) as my_file:
+            json.dump(my_dict, my_file)
+
+
+    def load_model(self, folder):
+        self.policy_net.load_state_dict('models/' + folder + '/policy.model')
+        self.target_net.load_state_dict('models/' + folder + '/target.model')
+        with open(...) as my_file:
+            hyper_dict = json.load(my_file)
+            print([f"{key} : {val} \n" for key, val in hyper_dict.items])
