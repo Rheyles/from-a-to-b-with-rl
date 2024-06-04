@@ -14,6 +14,7 @@ import os
 from params import *
 from network import DQN
 from buffer import ReplayMemory, Transition
+from display import Plotter
 
 class SuperAgent():
     def __init__(self) -> None:
@@ -39,7 +40,7 @@ class DQNAgent():
         self.memory = ReplayMemory(MEM_SIZE)
         self.steps_done = 0
         self.losses = []
-        self.rewards = 0
+        self.rewards = []
 
     def prepare_observation(state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
         """
@@ -157,7 +158,11 @@ class DQNAgent():
         print(f'Reward in batch:  {reward_batch.sum()}')
 
         self.losses.append(float(loss))
-        #plot_loss()
+
+        #Plotting
+        Plotter().plot_data_gradually('Loss', self.losses)
+        Plotter().plot_data_gradually('Rewards', self.rewards)
+
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -170,7 +175,8 @@ class DQNAgent():
 
     def update_memory(self, state, action, next_state, reward):
         self.memory.push(state, action, next_state, reward)
-        self.rewards += reward
+        self.rewards.append( sum(self.rewards) + reward )
+        print(self.rewards[-1])
 
     def soft_update_agent(self):
         """
