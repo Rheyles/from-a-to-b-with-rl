@@ -25,20 +25,20 @@ class Plotter():
         """
 
         # We get the correct Figure object
+        title = 'Result' if show_result else 'Training ...'
+
         if data_name not in cls.fig_data_list:
             cls.fig_data_list.append(data_name)
-            plt.figure(len(cls.fig_data_list))
+            fig = plt.figure(len(cls.fig_data_list))
+            ax = plt.axes()
+            ax.set_title(title)
+            ax.plot(data)
+            ax.set_xlabel('Step')
+            ax.set_ylabel(data_name)
         else:
-            plt.figure(cls.fig_data_list.index(data_name) + 1)
-
-        if show_result:
-            plt.title('Result')
-        else:
-            plt.clf()
-            plt.title('Training...')
-        plt.xlabel('Step')
-        plt.ylabel(data_name)
-        plt.plot(data)
+            ax = plt.figure(cls.fig_data_list.index(data_name) + 1).gca()
+            ax._children[0].set_data(np.arange(len(data)), data)
+            ax.axis([0, len(data), 0, max(data)])
 
         plt.pause(0.001)  # pause a bit so that plots are updated
 

@@ -54,17 +54,17 @@ class DQNAgent():
             np.ndarray: _description_
         """
         state = int(state[0].item())
-        print(state)
-        print(env_map)
+        # print(state)
+        # print(env_map)
 
-        if state - 4 >=0 :
-            print(env_map[(state-4)//4][(state-4)%4])
-        if state + 4 < 16 :
-            print(env_map[(state+4)//4][(state+4)%4])
-        if (state+1)//4 == state//4 :
-            print(env_map[(state+1)//4][(state+1)%4])
-        if (state-1)//4 == state//4 :
-            print(env_map[(state-1)//4][(state-1)%4])
+        # if state - 4 >=0 :
+        #     print(env_map[(state-4)//4][(state-4)%4])
+        # if state + 4 < 16 :
+        #     print(env_map[(state+4)//4][(state+4)%4])
+        # if (state+1)//4 == state//4 :
+        #     print(env_map[(state+1)//4][(state+1)%4])
+        # if (state-1)//4 == state//4 :
+        #     print(env_map[(state-1)//4][(state-1)%4])
 
         # print(desc_env)
 
@@ -151,19 +151,21 @@ class DQNAgent():
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-
-        future_possible_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32)
-        best_action = torch.zeros(BATCH_SIZE, dtype=int)
-        best_action_values = torch.zeros(BATCH_SIZE, device=DEVICE)
+        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32)
+        rewards_tensor = torch.tile(reward_batch, (4,1)).T
 
         with torch.no_grad():
-            result = self.target_net(non_final_next_states.unsqueeze(-1))
-            rewards_tensor = torch.tile(reward_batch[non_final_mask], (4,1)).T
-            future_possible_state_values[non_final_mask,:] = \
-                (result * GAMMA) + rewards_tensor
+            future_state_values[non_final_mask,:] = self.target_net(non_final_next_states.unsqueeze(-1))
 
-            best_action[non_final_mask] = future_possible_state_values[non_final_mask].argmax(1)
-            best_action_values[non_final_mask] = future_possible_state_values[non_final_mask].max(1).values
+        future_state_values = (future_state_values * GAMMA) + rewards_tensor
+        best_action = future_state_values.argmax(1)
+        best_action_values = future_state_values.max(1).values
+
+        # print('\n\n')
+        # print(torch.cat((state_batch.unsqueeze(1), action_batch, future_state_values, best_action_values.unsqueeze(1)), dim=1))
+        # print('\n')
+
+
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
@@ -171,8 +173,10 @@ class DQNAgent():
         self.losses.append(float(loss))
 
         #Plotting
-        Plotter().plot_data_gradually('Loss', self.losses)
-        Plotter().plot_data_gradually('Rewards', self.rewards)
+
+        if self.steps_done % 100 == 0:
+            Plotter().plot_data_gradually('Loss', self.losses)
+            Plotter().plot_data_gradually('Rewards', self.rewards)
 
 
         # Optimize the model
@@ -182,11 +186,10 @@ class DQNAgent():
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        show_diagnostics = True
+        show_diagnostics = False
         if show_diagnostics:
 
             with torch.no_grad():
-                # pass
                 action_dict = {0:'←', 1:'↓', 2:'→', 3:'↑'}
                 action_arrows = [action_dict[elem.item()] for elem in action_batch]
                 best_act_arrs = [action_dict[elem.item()] for elem in best_action]
@@ -196,15 +199,17 @@ class DQNAgent():
                 reward_str     = 'Reward (s,a)  ' + ' | '.join([f"{elem:5.0f}" for elem in reward_batch])
                 next_state_str = 'Future state  ' + ' | '.join([f"{elem:5.0f}"  for elem in all_next_states])
                 current_Q_str  = 'Current Q     ' + ' | '.join([f"{elem:+4.2f}" for elem in torch.squeeze(state_action_values)])
-                Q_left_str     = 'Estimated Q ← ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,0]])
-                Q_down_str     = 'Estimated Q ↓ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,1]])
-                Q_right_str    = 'Estimated Q → ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,2]])
-                Q_up_str       = 'Estimated Q ↑ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,3]])
+                Q_left_str     = 'Estimated Q ← ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,0]])
+                Q_down_str     = 'Estimated Q ↓ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,1]])
+                Q_right_str    = 'Estimated Q → ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,2]])
+                Q_up_str       = 'Estimated Q ↑ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,3]])
                 expected_Q_str = 'Best known Q  ' + ' | '.join([f"{elem:+4.2f}" for elem in best_action_values])
-                best_act_str   = 'Best action   ' + ' | '.join([f"    {elem}"   for elem in best_act_arrs])
+                best_act_str   = 'Bst futr actn ' + ' | '.join([f"    {elem}"   for elem in best_act_arrs])
+
+                eps = EPS_END + (EPS_START - EPS_END) * np.exp(-self.steps_done / EPS_DECAY)
 
                 print("\033[A"*16)
-                print(f'\nStep {self.steps_done:4.0f}, loss {float(loss):5.2e}, total rewards {self.rewards.item():3.0f}')
+                print(f'\nStep {self.steps_done:4.0f}, \t loss : {float(loss):5.2e}, \t rewards : {self.rewards[-1]:3.0f}, \t epsilon : {eps:.3f}')
                 print('-'*len(states_str))
                 print(states_str)
                 print(action_str)
@@ -218,6 +223,22 @@ class DQNAgent():
                 print(expected_Q_str)
                 print(best_act_str)
                 print('-'*len(states_str))
+
+                # Print interesting states
+
+                if self.steps_done > 4000:
+                    import time
+                    time.sleep(0.02)
+
+                state_actions = list(zip(np.array(state_batch), np.array(torch.squeeze(action_batch))))
+                if ((13,2) in state_actions or (10, 1) in state_actions)and self.steps_done > 20000:
+                    input()
+
+        else:
+            
+            eps = EPS_END + (EPS_START - EPS_END) * np.exp(-self.steps_done / EPS_DECAY)
+            print(f'Step {self.steps_done:4.0f}, \t loss : {float(loss):5.2e}, \t rewards : {self.rewards[-1]:3.0f}, \t epsilon : {eps:.3f}', end='\r')
+
 
         return self.losses
 
