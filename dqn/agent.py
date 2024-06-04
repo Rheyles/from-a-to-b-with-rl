@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 
-from numpy import exp
+import numpy as np
 import random
 import typing
 
@@ -41,7 +41,26 @@ class DQNAgent():
         self.losses = []
         self.rewards = 0
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+    def prepare_observation(state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
+        """
+        !!! SPECIFIC TO FROZEN LAKE !!!
+
+        Args:
+            state (torch.Tensor): _description_
+            desc_env (np.ndarray): _description_
+
+        Returns:
+            np.ndarray: _description_
+        """
+        print(state)
+        print(env_map)
+
+        # print(desc_env)
+
+        return None
+
+
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -57,7 +76,7 @@ class DQNAgent():
 
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-            exp(-self.steps_done / EPS_DECAY)
+            np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
         if sample > eps_threshold:
             with torch.no_grad():

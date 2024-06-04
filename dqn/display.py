@@ -15,7 +15,7 @@ class Plotter():
         """
         Plots gradually the data as a function of time. Each data is plotted in
         its own figure
-        ex : Plotter().plot_data_gradually(data,data_name)
+        ex : Plotter().plot_data_gradually(data_name,data)
 
         Args:
             data_name (str): the name of the data you want to plot
