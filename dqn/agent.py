@@ -104,16 +104,16 @@ class DQNAgent():
                                             batch.next_state)), device=DEVICE, dtype=torch.bool)
         non_final_next_states = torch.cat([s for s in batch.next_state
                                                     if s is not None])
+        all_next_states = [s.item() if s is not None else -1
+                           for s in batch.next_state ]
 
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-
         state_action_values = self.policy_net(state_batch.unsqueeze(-1)).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
@@ -122,21 +122,22 @@ class DQNAgent():
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
 
-        next_state_values = torch.zeros(BATCH_SIZE, device=DEVICE)
+        future_possible_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32)
+        best_action = torch.zeros(BATCH_SIZE, dtype=int)
+        best_action_values = torch.zeros(BATCH_SIZE, device=DEVICE)
 
         with torch.no_grad():
             result = self.target_net(non_final_next_states.unsqueeze(-1))
-            next_state_values[non_final_mask] = result.max(1).values
+            rewards_tensor = torch.tile(reward_batch[non_final_mask], (4,1)).T
+            future_possible_state_values[non_final_mask,:] = \
+                (result * GAMMA) + rewards_tensor
 
-        # Compute the expected Q values
-        expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+            best_action[non_final_mask] = future_possible_state_values[non_final_mask].argmax(1)
+            best_action_values[non_final_mask] = future_possible_state_values[non_final_mask].max(1).values
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-        print(f"Loss: {float(loss)}")
-        print(f'Reward in batch:  {reward_batch.sum()}')
-
+        loss = criterion(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
         #plot_loss()
 
@@ -146,6 +147,43 @@ class DQNAgent():
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
+
+        show_diagnostics = True
+        if show_diagnostics:
+
+            with torch.no_grad():
+                # pass
+                action_dict = {0:'←', 1:'↓', 2:'→', 3:'↑'}
+                action_arrows = [action_dict[elem.item()] for elem in action_batch]
+                best_act_arrs = [action_dict[elem.item()] for elem in best_action]
+
+                states_str     = 'Current state ' + ' | '.join([f"{elem:5.0f}" for elem in state_batch])
+                action_str     = 'Current action' + ' | '.join([f"    {elem}"   for elem in action_arrows])
+                reward_str     = 'Reward (s,a)  ' + ' | '.join([f"{elem:5.0f}" for elem in reward_batch])
+                next_state_str = 'Future state  ' + ' | '.join([f"{elem:5.0f}"  for elem in all_next_states])
+                current_Q_str  = 'Current Q     ' + ' | '.join([f"{elem:+4.2f}" for elem in torch.squeeze(state_action_values)])
+                Q_left_str     = 'Estimated Q ← ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,0]])
+                Q_down_str     = 'Estimated Q ↓ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,1]])
+                Q_right_str    = 'Estimated Q → ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,2]])
+                Q_up_str       = 'Estimated Q ↑ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_possible_state_values[:,3]])
+                expected_Q_str = 'Best known Q  ' + ' | '.join([f"{elem:+4.2f}" for elem in best_action_values])
+                best_act_str   = 'Best action   ' + ' | '.join([f"    {elem}"   for elem in best_act_arrs])
+
+                print("\033[A"*16)
+                print(f'\nStep {self.steps_done:4.0f}, loss {float(loss):5.2e}, total rewards {self.rewards.item():3.0f}')
+                print('-'*len(states_str))
+                print(states_str)
+                print(action_str)
+                print(reward_str)
+                print(next_state_str)
+                print(current_Q_str)
+                print(Q_left_str)
+                print(Q_down_str)
+                print(Q_right_str)
+                print(Q_up_str)
+                print(expected_Q_str)
+                print(best_act_str)
+                print('-'*len(states_str))
 
         return self.losses
 
