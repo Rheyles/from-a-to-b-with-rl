@@ -14,5 +14,5 @@ for _ in range(NUM_EPISODES):
 
 
 print(f"Average episode duration: {sum(episode_durations) / len(episode_durations)}")
-
-env.close()
+input('Press any key to close')
+env.env.close()
