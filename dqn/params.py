@@ -1,6 +1,6 @@
 import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # if GPU is to be used
-RENDER_FPS = 100
+RENDER_FPS = 150
 NUM_EPISODES = 100
 
 # MEM_SIZE is the size of the ReplayMemory buffer

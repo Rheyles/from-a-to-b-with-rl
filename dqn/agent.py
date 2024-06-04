@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 
-from numpy import exp
+import numpy as np
 import random
 import typing
 
@@ -14,6 +14,7 @@ import os
 from params import *
 from network import DQN
 from buffer import ReplayMemory, Transition
+from display import Plotter
 
 class SuperAgent():
     def __init__(self) -> None:
@@ -39,9 +40,38 @@ class DQNAgent():
         self.memory = ReplayMemory(MEM_SIZE)
         self.steps_done = 0
         self.losses = []
-        self.rewards = 0
+        self.rewards = [0]
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+    def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
+        """
+        !!! SPECIFIC TO FROZEN LAKE !!!
+
+        Args:
+            state (torch.Tensor): _description_
+            desc_env (np.ndarray): _description_
+
+        Returns:
+            np.ndarray: _description_
+        """
+        state = int(state[0].item())
+        print(state)
+        print(env_map)
+
+        if state - 4 >=0 :
+            print(env_map[(state-4)//4][(state-4)%4])
+        if state + 4 < 16 :
+            print(env_map[(state+4)//4][(state+4)%4])
+        if (state+1)//4 == state//4 :
+            print(env_map[(state+1)//4][(state+1)%4])
+        if (state-1)//4 == state//4 :
+            print(env_map[(state-1)//4][(state-1)%4])
+
+        # print(desc_env)
+
+        return None
+
+
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -54,10 +84,10 @@ class DQNAgent():
         Returns:
             act ActType : Action that the agent performs
         """
-
+        self.prepare_observation(state, env_map)
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-            exp(-self.steps_done / EPS_DECAY)
+            np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
         if sample > eps_threshold:
             with torch.no_grad():
@@ -139,7 +169,11 @@ class DQNAgent():
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
-        #plot_loss()
+
+        #Plotting
+        Plotter().plot_data_gradually('Loss', self.losses)
+        Plotter().plot_data_gradually('Rewards', self.rewards)
+
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -189,7 +223,9 @@ class DQNAgent():
 
     def update_memory(self, state, action, next_state, reward):
         self.memory.push(state, action, next_state, reward)
-        self.rewards += reward
+        self.rewards.append( self.rewards[-1] + reward[0].item() )
+        #print(self.rewards)
+        #print(reward)
 
     def soft_update_agent(self):
         """
@@ -204,47 +240,19 @@ class DQNAgent():
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self, folder='saved_model/') -> None:
-        """SAVE_MODEL() : saves our Pytorch model and
-        associated parameters. Program will create a folder [folder]/MMDD_HHmm/
-        and puts the policy.model, target.model and params.json files in there.
+    def save_model(self, path='model/'):
+        my_date = datetime.strftime(datetime.now(), "%m%d_%h%")
+        os.makedirs(path + my_date, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), 'models/' + my_date + '/policy.model')
+        torch.save(self.target_net.state_dict(), 'models/' + my_date + '/target.model')
 
-        Args:
-            folder (str, optional): _description_. Defaults to 'saved_model/'.
-        """
-        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
-        os.makedirs(folder + my_date, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), folder + my_date + '/policy.model')
-        torch.save(self.target_net.state_dict(), folder + my_date + '/target.model')
-
-        with open(folder + my_date + '/params.json', 'w') as my_file:
-            import params as prm
-            my_dict = prm.__dict__
-            my_dict = {key: val for key, val in my_dict.items()
-                       if ('__' not in key)
-                       and key != 'torch'
-                       and key != 'DEVICE'}
+        with open(...) as my_file:
             json.dump(my_dict, my_file)
 
-    def load_model(self, folder: str) -> None:
-        """LOAD_MODEL() : Loads an existing model
-        based on a folder into a model. Will also
-        print the hyperparameters of the model when
-        it was instantiated.
 
-        Args:
-            folder (str): The folder you want to load from. Needs
-            to have a policy.model, target.model and params.json file.
-        """
-        self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
-        self.target_net.load_state_dict(torch.load(folder + '/target.model'))
-        with open(folder + '/params.json') as my_file:
+    def load_model(self, folder):
+        self.policy_net.load_state_dict('models/' + folder + '/policy.model')
+        self.target_net.load_state_dict('models/' + folder + '/target.model')
+        with open(...) as my_file:
             hyper_dict = json.load(my_file)
-            print(f'\nHyperparameters for model in {folder}')
-            print(''.join([f"- {key:13s} : {val} \n"
-                   for key, val in hyper_dict.items()]))
-
-if __name__ == '__main__':
-    my_agent = DQNAgent(16, 4)
-    my_agent.save_model()
-    my_agent.load_model('saved_model/0604_1538')
+            print([f"{key} : {val} \n" for key, val in hyper_dict.items])
