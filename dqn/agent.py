@@ -42,7 +42,7 @@ class DQNAgent():
         self.losses = []
         self.rewards = []
 
-    def prepare_observation(state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
+    def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
         """
         !!! SPECIFIC TO FROZEN LAKE !!!
 
@@ -53,8 +53,18 @@ class DQNAgent():
         Returns:
             np.ndarray: _description_
         """
+        state = int(state[0].item())
         print(state)
         print(env_map)
+
+        if state - 4 >=0 :
+            print(env_map[(state-4)//4][(state-4)%4])
+        if state + 4 < 16 :
+            print(env_map[(state+4)//4][(state+4)%4])
+        if (state+1)//4 == state//4 :
+            print(env_map[(state+1)//4][(state+1)%4])
+        if (state-1)//4 == state//4 :
+            print(env_map[(state-1)//4][(state-1)%4])
 
         # print(desc_env)
 
@@ -74,7 +84,7 @@ class DQNAgent():
         Returns:
             act ActType : Action that the agent performs
         """
-
+        self.prepare_observation(state, env_map)
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)

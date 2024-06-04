@@ -21,7 +21,7 @@ class Environment():
         state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
 
         for t in count():
-            action = agent.select_action(self.env.action_space, state)
+            action = agent.select_action(self.env.action_space, state, self.env.get_wrapper_attr('desc'))
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
             done = terminated or truncated
