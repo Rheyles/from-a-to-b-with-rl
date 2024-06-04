@@ -25,8 +25,8 @@ class SuperAgent():
 
 class DQNAgent():
 
-    def __init__(self, x_dim:int, y_dim:int):
-        """_summary_
+    def __init__(self, x_dim:int, y_dim:int) -> None:
+        """
 
         Args:
             x_dim (int): Size of model input

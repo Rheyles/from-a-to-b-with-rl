@@ -3,7 +3,6 @@ from environment import Environment
 from params import NUM_EPISODES
 import agent
 
-
 env = Environment(gym.make("FrozenLake-v1", render_mode='human', is_slippery=False))
 agt = agent.DQNAgent(1, env.env.action_space.n)
 
