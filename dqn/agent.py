@@ -240,19 +240,31 @@ class DQNAgent():
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self, path='model/'):
-        my_date = datetime.strftime(datetime.now(), "%m%d_%h%")
-        os.makedirs(path + my_date, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), 'models/' + my_date + '/policy.model')
-        torch.save(self.target_net.state_dict(), 'models/' + my_date + '/target.model')
+    def save_model(self, folder='models/') -> None:
+        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
+        os.makedirs(folder + my_date, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), folder + my_date + '/policy.model')
+        torch.save(self.target_net.state_dict(), folder + my_date + '/target.model')
 
-        with open(...) as my_file:
+        with open(folder + my_date + '/params.json', 'w') as my_file:
+            import params as prm
+            my_dict = prm.__dict__
+            my_dict = {key : val for key, val in my_dict.items()
+                       if '__' not in key
+                       and key != 'torch'
+                       and key != 'DEVICE'}
+
             json.dump(my_dict, my_file)
 
 
-    def load_model(self, folder):
-        self.policy_net.load_state_dict('models/' + folder + '/policy.model')
-        self.target_net.load_state_dict('models/' + folder + '/target.model')
-        with open(...) as my_file:
+    def load_model(self, folder : str) -> None:
+        self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
+        self.target_net.load_state_dict(torch.load(folder + '/target.model'))
+        with open(folder + '/params.json') as my_file:
             hyper_dict = json.load(my_file)
-            print([f"{key} : {val} \n" for key, val in hyper_dict.items])
+            print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))
+
+if __name__ == '__main__':
+    agt = DQNAgent(16, 8)
+    # agt.save_model()
+    agt.load_model('models/0604_1729')
