@@ -1,11 +1,10 @@
 import gymnasium as gym # type: ignore
-import matplotlib
 import matplotlib.pyplot as plt
 from itertools import count
-from params import DEVICE, BATCH_SIZE, LR, GAMMA, TAU
+from params import DEVICE, BATCH_SIZE, LR, GAMMA, TAU, MEM_SIZE, RENDER_FPS
 from network import DQN
 from agent import ReplayMemory, select_action, Transition
-from display import plot_loss
+from display import plot_loss, pretty_print
 
 import torch
 import torch.nn as nn
@@ -13,35 +12,36 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 
-env = gym.make("FrozenLake-v1", 
-               render_mode = 'human', 
-               is_slippery=False
-               )
-env.metadata['render_fps'] = 100
+
+def run():
+
+    env = gym.make("FrozenLake-v1",
+                render_mode = 'human',
+                is_slippery=False
+                )
+    env.metadata['render_fps'] = RENDER_FPS
 
 
+    n_actions = int(env.action_space.n) # Get number of actions from gym action space
+    n_observations = 1 # Get the number of state observations
+    state, info = env.reset()
 
+    policy_net = DQN(n_observations, n_actions).to(DEVICE)
+    target_net = DQN(n_observations, n_actions).to(DEVICE)
+    target_net.load_state_dict(policy_net.state_dict())
 
-n_actions = int(env.action_space.n) # Get number of actions from gym action space
-n_observations = 1 # Get the number of state observations
-state, info = env.reset()
-
-policy_net = DQN(n_observations, n_actions).to(DEVICE)
-target_net = DQN(n_observations, n_actions).to(DEVICE)
-target_net.load_state_dict(policy_net.state_dict())
-
-optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-memory = ReplayMemory(10000)
+    optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
+    memory = ReplayMemory(MEM_SIZE)
 
 
 episode_durations = []
 losses = []
 
-   
+
 
 def optimize_model():
     '''
-    Brice : I have no idea where to put this function. In agent.py or in network.py ? 
+    Brice : I have no idea where to put this function. In agent.py or in network.py ?
     Well, for now let's keep it here.
     '''
     if len(memory) < BATCH_SIZE:
@@ -73,15 +73,15 @@ def optimize_model():
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=DEVICE)
+
     with torch.no_grad():
         result = target_net(non_final_next_states.unsqueeze(-1))
-        # print(non_final_mask)
-        # print(result)
-        # print(result.max(1))
-        # print(result.max(1).values)
         next_state_values[non_final_mask] = result.max(1).values
+
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+    # pretty_print((state_batch, action_batch, reward_batch, next_state_values), )
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
@@ -89,8 +89,6 @@ def optimize_model():
     losses.append(float(loss))
 
     print(state_action_values.shape)
-    Sa
-
     plot_loss()
 
 
@@ -113,7 +111,7 @@ for i_episode in range(num_episodes):
     state, info = env.reset()
     state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
     for t in count():
-        action = select_action(state)
+        action = select_action(env, state, policy_net, device=DEVICE)
         observation, reward, terminated, truncated, _ = env.step(action.item())
         reward = torch.tensor([reward], device=DEVICE)
         done = terminated or truncated

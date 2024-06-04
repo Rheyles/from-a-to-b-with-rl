@@ -8,6 +8,8 @@
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # if GPU is to be used
+MEM_SIZE = 10000
+RENDER_FPS = 100
 BATCH_SIZE = 64
 GAMMA = 0.99
 EPS_START = 0.9

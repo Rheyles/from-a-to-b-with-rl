@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import sys
 
 
@@ -24,12 +25,13 @@ def pretty_print(arrays : tuple, transpose=False, names=None):
     or tuples of arrays. The function is a bit ugly, but it works.
     '''
 
-    n_rows = 0 
-    if names is None: 
+    n_rows = 0
+    if names is None:
         names = [f'Table {no}' for no in range(len(arrays))]
 
     for array, name in zip(arrays, names):
-        if transpose: array = np.array(array).T
+        array = np.atleast_2d(array)
+        if transpose: array = array.T
 
         n_char_table = 7 * array.shape[1]
         n_char_name = len(name)
@@ -47,8 +49,8 @@ def pretty_print(arrays : tuple, transpose=False, names=None):
 
         print(pretty_str, end='')
 
-    for row in range(n_rows+1):
-        sys.stdout.write("\033[F") # Cursor up one line
+    # for row in range(n_rows+1):
+        # sys.stdout.write("\033[F") # Cursor up one line
 
 
 if __name__ == '__main__':
@@ -57,4 +59,3 @@ if __name__ == '__main__':
     x = np.random.uniform(size=(4,10))
     y = np.random.uniform(size=(4,10))
     pretty_print((x,y), names=('fake x', 'real x'))
-

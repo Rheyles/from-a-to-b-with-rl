@@ -1,29 +1,11 @@
 import torch
-from numpy import exp, random
-from network import policy_net
+from numpy import exp
+import random
 from params import EPS_END, EPS_START, EPS_DECAY, DEVICE
-from collections import namedtuple, deque
-
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
 
 steps_done = 0
 
-def select_action(env, state, device=DEVICE):
+def select_action(env, state, policy_net, device=DEVICE):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
@@ -39,4 +21,3 @@ def select_action(env, state, device=DEVICE):
             return result.max(0).indices.view(1, 1)
     else:
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
-
