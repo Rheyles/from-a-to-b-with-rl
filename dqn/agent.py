@@ -18,7 +18,7 @@ from buffer import ReplayMemory, Transition
 class SuperAgent():
     def __init__(self) -> None:
         pass
-    def select_action()-> gym.ActType:
+    def select_action()-> torch.Tensor:
         pass
     def optimize_model() -> list:
         pass
@@ -35,12 +35,12 @@ class DQNAgent():
         self.policy_net = DQN(x_dim, y_dim)
         self.target_net = DQN(x_dim, y_dim)
 
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=LR)
+        self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=LR)
         self.memory = ReplayMemory(10000)
         self.loss = []
         self.rewards = []
 
-    def select_action(self, act_space, state: gym.ObsType) -> gym.ActType:
+    def select_action(self, act_space, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -165,19 +165,47 @@ class DQNAgent():
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self, path='model/'):
-        my_date = datetime.strftime(datetime.now(), "%m%d_%h%")
-        os.makedirs(path + my_date, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), 'models/' + my_date + '/policy.model')
-        torch.save(self.target_net.state_dict(), 'models/' + my_date + '/target.model')
+    def save_model(self, folder='saved_model/') -> None:
+        """SAVE_MODEL() : saves our Pytorch model and
+        associated parameters. Program will create a folder [folder]/MMDD_HHmm/
+        and puts the policy.model, target.model and params.json files in there.
 
-        with open(...) as my_file:
+        Args:
+            folder (str, optional): _description_. Defaults to 'saved_model/'.
+        """
+        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
+        os.makedirs(folder + my_date, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), folder + my_date + '/policy.model')
+        torch.save(self.target_net.state_dict(), folder + my_date + '/target.model')
+
+        with open(folder + my_date + '/params.json', 'w') as my_file:
+            import params as prm
+            my_dict = prm.__dict__
+            my_dict = {key: val for key, val in my_dict.items()
+                       if ('__' not in key)
+                       and key != 'torch'
+                       and key != 'DEVICE'}
             json.dump(my_dict, my_file)
 
+    def load_model(self, folder: str) -> None:
+        """LOAD_MODEL() : Loads an existing model
+        based on a folder into a model. Will also
+        print the hyperparameters of the model when
+        it was instantiated.
 
-    def load_model(self, folder):
-        self.policy_net.load_state_dict('models/' + folder + '/policy.model')
-        self.target_net.load_state_dict('models/' + folder + '/target.model')
-        with open(...) as my_file:
+        Args:
+            folder (str): The folder you want to load from. Needs
+            to have a policy.model, target.model and params.json file.
+        """
+        self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
+        self.target_net.load_state_dict(torch.load(folder + '/target.model'))
+        with open(folder + '/params.json') as my_file:
             hyper_dict = json.load(my_file)
-            print([f"{key} : {val} \n" for key, val in hyper_dict.items])
+            print(f'\nHyperparameters for model in {folder}')
+            print(''.join([f"- {key:13s} : {val} \n"
+                   for key, val in hyper_dict.items()]))
+
+if __name__ == '__main__':
+    my_agent = DQNAgent(16, 4)
+    my_agent.save_model()
+    my_agent.load_model('saved_model/0604_1538')
