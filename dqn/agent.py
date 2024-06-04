@@ -40,7 +40,7 @@ class DQNAgent():
         self.memory = ReplayMemory(MEM_SIZE)
         self.steps_done = 0
         self.losses = []
-        self.rewards = []
+        self.rewards = [0]
 
     def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
         """
@@ -185,8 +185,9 @@ class DQNAgent():
 
     def update_memory(self, state, action, next_state, reward):
         self.memory.push(state, action, next_state, reward)
-        self.rewards.append( sum(self.rewards) + reward )
-        print(self.rewards[-1])
+        self.rewards.append( self.rewards[-1] + reward[0].item() )
+        #print(self.rewards)
+        #print(reward)
 
     def soft_update_agent(self):
         """
