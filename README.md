@@ -119,20 +119,21 @@ Other interesting commands are `dir` (print folder contents) and `cd`. The proje
 
 #### On VSCode
 
-Once you have checked that the connection works, you can try connecting _through_ VSCode. Click on the blue box (see below) and select `connect to host`, then ``
+Once you have checked that the connection works, you can try connecting _through_ VSCode. Click on the blue box (see below) and select `connect to host`.
 
 ![img](vscode_ssh_screenshot.png)
 
-Add a new ssh host and follow the instructions of the box that pops up, re-type the command :
+Then, follow the instructions of the box that pops up, i.e. when prompted, re-type the command :
 
 ```
   ssh lewagon@XXX.XXX.XXX.XXX
 ```
+
 VSCode might ask you to save some changes to a config file so you don't have to retype the ssh command again. You can say yes to that. Then, it will probably fail once after asking for the remote computer password. Just specify the remote machine is
 a Windows, and try again, normally it should work !
 
 **/!\\** The local account has a lot of privileges, __but__ you cannot access github from it ! So if you need to `git pull`, you will have
-to ask Brice to do it for you (he has a GitHub tunnel). Also : don't clutter the computer.
+to ask Brice to do it for you (he has a GitHub tunnel). Also : don't clutter or break the computer.
 
 ### Notes on GPU acceleration :
 
