@@ -147,7 +147,7 @@ class DQNAgentBase(SuperAgent):
 
         #Plotting
 
-        if self.steps_done % 100 == 0:
+        if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
             Plotter().plot_data_gradually('Rewards', self.rewards)
 
@@ -388,8 +388,9 @@ class DQNAgentObs(DQNAgentBase):
         self.losses.append(float(loss))
 
         #Plotting
-        Plotter().plot_data_gradually('Loss', self.losses)
-        Plotter().plot_data_gradually('Rewards', self.rewards)
+        if self.steps_done % DISPLAY_EVERY == 0:
+            Plotter().plot_data_gradually('Loss', self.losses)
+            Plotter().plot_data_gradually('Rewards', self.rewards)
 
 
         # Optimize the model
