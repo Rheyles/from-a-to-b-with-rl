@@ -111,7 +111,11 @@ My machine is a Windows, so some Linux commands will not work (`touch`, maybe ev
 * pyenv should work : `pyenv --help`
 * git should work : `git --help`
 
-Other interesting commands are `dir` (print folder contents) and `cd`. I'
+Other interesting commands are `dir` (print folder contents) and `cd`. The project folder is located at : 
+
+```
+  C:/users/lewagon/python/from-a-to-b-with-rl
+```
 
 #### On VSCode
 
