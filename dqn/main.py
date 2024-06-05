@@ -4,13 +4,17 @@ from environment import Environment
 from params import NUM_EPISODES, RENDER_FPS
 import agent, os
 
+import torch.distributed as dist
+
+# dist.init_process_group(backend='gloo')
+
 # Initialize Environment
-env = Environment(gym.make("CarRacing-v2",render_mode='human'))
+env = Environment(gym.make("CarRacing-v2",render_mode='human', continuous=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
-agt = agent.CarDQNAgent(0, env.env.action_space.n, dropout_rate=0.1)
-agt.load_model("./models/0605_1015DQNAgentObs")
+agt = agent.CarDQNAgent(1, env.env.action_space.n, dropout_rate=0.1)
+# agt.load_model("./models/0605_1015DQNAgentObs")
 
 
 for _ in range(NUM_EPISODES):

@@ -21,7 +21,7 @@ class Environment():
         state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
 
         for t in count():
-            action = agent.select_action(self.env.action_space, state, self.env.get_wrapper_attr('desc'))
+            action = agent.select_action(self.env.action_space, state, None) #self.env.get_wrapper_attr('desc')
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
             done = terminated or truncated
@@ -32,7 +32,7 @@ class Environment():
                 next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
 
             # Store the transition in memory
-            agent.update_memory(state, action, next_state, reward, self.env.get_wrapper_attr('desc'))
+            agent.update_memory(state, action, next_state, reward, None) #self.env.get_wrapper_attr('desc')
 
             # Move to the next state
             state = next_state
