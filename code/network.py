@@ -35,7 +35,7 @@ class ConvDQN(nn.Module):
             nn.Dropout(p=dropout_rate))
         self.lin1 = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(5440, n_actions, bias=True))
+            nn.Linear(320, n_actions, bias=True))
 
     def forward(self, x):
         out = self.conv1(x)

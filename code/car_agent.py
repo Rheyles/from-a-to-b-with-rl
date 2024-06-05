@@ -24,19 +24,13 @@ class CarDQNAgent(DQNAgent):
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
 
-        #state = state.numpy()
+        if state is None:
+            return None
 
         crop_height = int(state.shape[1] * 0.88)
         state = state[:, :crop_height, :, :]
 
-        #state = Image.open(state).convert("L")
-        #state = np.asarray(state)
-        #plt.imshow(state, cmap='gray', vmin=0, vmax=255)
-        #plt.show()
-
         r, g, b = state[:, :, :, 0], state[:, :, :, 1], state[:, :, :, 2]
-        # gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
-
         gray = g // 64
 
         #plt.imshow(gray.squeeze(0), cmap='gray')
@@ -73,7 +67,6 @@ class CarDQNAgent(DQNAgent):
                     # second column on max result is index of where max element was
                     # found, so we pick action with the larger expected reward.
 
-                    state = torch.moveaxis(state,-1,1)
                     result = self.policy_net(state)
                     action = result.max(1).indices.view(1, 1)
             else:

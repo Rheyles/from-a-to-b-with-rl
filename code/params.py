@@ -18,7 +18,7 @@ GAMMA = 0.7
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 EPS_START = 1.0
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 100000
 
 # TAU is the update rate of the target network
 TAU = 0.02
