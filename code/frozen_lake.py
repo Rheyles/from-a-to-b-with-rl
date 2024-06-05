@@ -2,18 +2,14 @@ import gymnasium as gym
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 from environment import Environment
 from params import NUM_EPISODES, RENDER_FPS
-import agent, os
-
-import torch.distributed as dist
-
-# dist.init_process_group(backend='gloo')
+import agent
 
 # Initialize Environment
-env = Environment(gym.make("CarRacing-v2",render_mode='human', continuous=False))
+env = Environment(gym.make("FrozenLake-v1",render_mode='human', is_slippery=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
-agt = agent.CarDQNAgent(1, env.env.action_space.n, dropout_rate=0.1)
+agt = agent.FrozenDQNAgentBase(1, env.env.action_space.n)
 # agt.load_model("./models/0605_1015DQNAgentObs")
 
 

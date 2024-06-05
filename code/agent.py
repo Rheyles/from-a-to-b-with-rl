@@ -57,7 +57,7 @@ class FrozenDQNAgentBase(SuperAgent):
         self.show_diagnostics = show_diagnostics
 
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, _env_map: np.ndarray) -> torch.Tensor:
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -186,7 +186,7 @@ class FrozenDQNAgentBase(SuperAgent):
 
         return self.losses
 
-    def update_memory(self, state, action, next_state, reward, _env_map) -> None:
+    def update_memory(self, state, action, next_state, reward) -> None:
         self.memory.push(state, action, next_state, reward)
         self.rewards.append(reward[0].item())
         #print(self.rewards)
@@ -251,7 +251,7 @@ class CarDQNAgent(FrozenDQNAgentBase):
         self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, _env_map: np.ndarray) -> torch.Tensor:
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:

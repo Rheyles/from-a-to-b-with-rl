@@ -24,18 +24,18 @@ class ConvDQN(nn.Module):
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, stride=1),
+            nn.Conv2d(3, 32, kernel_size=9, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
         self.conv2 = nn.Sequential(
-            nn.Conv2d(32, 32, kernel_size=3, stride=1),
+            nn.Conv2d(32, 16, kernel_size=5, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
         self.lin1 = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(15488, n_actions, bias=True))
+            nn.Linear(6400, n_actions, bias=True))
 
     def forward(self, x):
         out = self.conv1(x)
