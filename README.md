@@ -64,19 +64,19 @@ algorithm :
 ```
 
 It should normally ask you to enter a file name (see below typical output).
-No bad choices here unless a file already exists, you can call it `rlkey`.
+No bad choices here unless a file already exists, you can call it `anything`.
 
 ```
   Generating public/private ed25519 key pair.
-  Enter file in which to save the key (/Users/indrianylionggo/.ssh/id_ed25519): mama
+  Enter file in which to save the key (/Users/indrianylionggo/.ssh/id_ed25519): .ssh/anything
   Enter passphrase (empty for no passphrase):
 ```
 
-It actually creates _two_ files, one being `<yourname>` (your _private_ key) and
-one being  `<yourname>.pub`, both in your `~/.ssh/` folder. **Keep your private
+It actually creates _two_ files, one being `anything` (your _private_ key) and
+one being  `anything.pub`, both in your `~/.ssh/` folder. **Keep your private
 key private !** and send the public key to Brice through Slack or anything.
 
-Then, you can ask Brice to connect to his home laptop. I will not put my public
+Then, you can ask Brice to connect to his home desktop. I will not put my public
 IP here since I am not crazy. It is available on the Slack channel. Let's say my
 IP address is `XXX.XXX.XXX.XXX` :
 
@@ -126,7 +126,12 @@ Add a new ssh host and follow the instructions of the box that pops up, re-type 
 ```
 
 VSCode might ask you to edit the `.ssh` configuration file, I think it cannot
-hurt. 
+hurt. It might ask you to save some changes to a config file (so you don't have to retype the ssh command again)
+and then will probably fail once after asking for the remote computer password. Just specify the remote machine is
+a Windows, and try again, normally it should work !
+
+**/!\** The local account has a lot of privileges, __but__ you cannot access github from it ! So if you need to `git pull`, you will have
+to ask Brice to do it for you (he has a GitHub tunnel). Also : don't clutter the computer.
 
 ### Notes on GPU acceleration :
 
