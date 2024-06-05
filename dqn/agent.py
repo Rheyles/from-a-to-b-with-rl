@@ -220,6 +220,12 @@ class DQNAgentBase(SuperAgent):
         self.target_net.load_state_dict(target_net_state_dict)
 
     def save_model(self, folder='models/') -> None:
+        """
+        Save a model
+
+        Args:
+            folder (str, optional): Folder where the model is saved. Defaults to 'models/'.
+        """
         my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
         os.makedirs(folder + my_date, exist_ok=True)
         torch.save(self.policy_net.state_dict(), folder + my_date + '/policy.model')
@@ -237,6 +243,12 @@ class DQNAgentBase(SuperAgent):
 
 
     def load_model(self, folder : str) -> None:
+        """
+        Load a model into an agent, loads a dictionnary of hyper params
+
+        Args:
+            folder (str): Folder where the model is saved
+        """
         self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
         self.target_net.load_state_dict(torch.load(folder + '/target.model'))
         with open(folder + '/params.json') as my_file:
