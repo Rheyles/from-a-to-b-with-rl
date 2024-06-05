@@ -15,8 +15,8 @@ class CarDQNAgent(DQNAgent):
 
     def __init__(self, y_dim: int, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
-        self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
+        self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
+        self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
 
@@ -106,7 +106,7 @@ class CarDQNAgent(DQNAgent):
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32)
+        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32, device = DEVICE)
         rewards_tensor = torch.tile(reward_batch, (5,1)).T
 
         with torch.no_grad():
