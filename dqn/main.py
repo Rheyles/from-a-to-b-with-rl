@@ -1,20 +1,18 @@
 import gymnasium as gym
+from environment import Environment
+from params import NUM_EPISODES, RENDER_FPS
+import agent
 
-env = gym.make('FrozenLake-v1',
-         desc=None,
-         map_name="4x4",
-         is_slippery=False,
-         render_mode='human')
+env = Environment(gym.make("FrozenLake-v1", render_mode='human', is_slippery=False))
+env.env.metadata['render_fps'] = RENDER_FPS
+agt = agent.DQNAgentBase(1, env.env.action_space.n)
 
-observation, info = env.reset()
+episode_durations = []
+for _ in range(NUM_EPISODES):
+    agt.steps_done = sum(episode_durations)
+    episode_durations.append(env.run_episode(agt))
 
-for _ in range(1000):
-    action = env.action_space.sample()  # agent policy that uses the observation and info
-    observation, reward, terminated, truncated, info = env.step(action)
 
-    print(observation)
-
-    if terminated or truncated:
-        observation, info = env.reset()
-
-env.close()
+print(f"Average episode duration: {sum(episode_durations) / len(episode_durations)}")
+input('Press any key to close')
+env.env.close()

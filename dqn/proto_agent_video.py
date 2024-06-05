@@ -1,5 +1,6 @@
 import gymnasium as gym # type: ignore
 from gymnasium.utils.save_video import save_video # type: ignore
+import os
 
 filming =''
 while filming not in ['y','n']:
