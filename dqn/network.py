@@ -1,11 +1,12 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
 
-class DQN(nn.Module):
+class LinearDQN(nn.Module):
 
     def __init__(self, n_observations, n_actions):
-        super(DQN, self).__init__()
+        super(LinearDQN, self).__init__()
         self.layer1 = nn.Linear(n_observations, 32)
         self.layer2 = nn.Linear(32, 32)
         self.layer3 = nn.Linear(32, n_actions)
@@ -16,3 +17,29 @@ class DQN(nn.Module):
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         return self.layer3(x)
+
+
+class ConvDQN(nn.Module):
+
+    def __init__(self, n_actions, drop_out_rate=0.0):
+        super(ConvDQN, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=drop_out_rate))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=drop_out_rate))
+        self.lin1 = nn.Sequential(
+            nn.Flatten,
+            nn.Linear(100, n_actions, bias=True))
+        nn.init.xavier_uniform_(self.fc2.weight)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.lin1(out)
+        return out

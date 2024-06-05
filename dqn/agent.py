@@ -12,13 +12,15 @@ import json
 import os
 
 from params import *
-from network import DQN
+from network import LinearDQN
 from buffer import ReplayMemory, Transition
 from display import Plotter
 
 class SuperAgent():
-    def __init__(self) -> None:
-        pass
+    def __init__(self, exploration=True, training=True) -> None:
+        self.exploration = exploration
+        self.training = training
+
     def select_action()-> torch.Tensor:
         pass
     def optimize_model() -> list:
@@ -28,17 +30,19 @@ class SuperAgent():
     def load_model():
         pass
 
+
 class DQNAgentBase(SuperAgent):
 
-    def __init__(self, x_dim:int, y_dim:int) -> None:
+    def __init__(self, x_dim:int, y_dim:int, **kwargs) -> None:
         """
 
         Args:
             x_dim (int): Size of model input
             y_dim (int): Size of model output
         """
-        self.policy_net = DQN(x_dim, y_dim)
-        self.target_net = DQN(x_dim, y_dim)
+        super().__init__(kwargs.get('exploration',True), kwargs.get('training',True))
+        self.policy_net = LinearDQN(x_dim, y_dim)
+        self.target_net = LinearDQN(x_dim, y_dim)
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
         self.memory = ReplayMemory(MEM_SIZE)
@@ -64,7 +68,7 @@ class DQNAgentBase(SuperAgent):
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
-        if sample > eps_threshold:
+        if sample > eps_threshold or not self.exploration:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
                 # t.max(1) will return the largest column value of each row.
@@ -91,6 +95,8 @@ class DQNAgentBase(SuperAgent):
         Returns:
             losses (list): Calculated Loss
         """
+        if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
+            return
 
         if len(self.memory) < BATCH_SIZE: return 0
 
@@ -198,7 +204,7 @@ class DQNAgentBase(SuperAgent):
 
         return self.losses
 
-    def update_memory(self, state, action, next_state, reward, _env_map):
+    def update_memory(self, state, action, next_state, reward, _env_map) -> None:
         self.memory.push(state, action, next_state, reward)
         self.rewards.append( self.rewards[-1] + reward[0].item() )
         #print(self.rewards)
@@ -218,12 +224,19 @@ class DQNAgentBase(SuperAgent):
         self.target_net.load_state_dict(target_net_state_dict)
 
     def save_model(self, folder='models/') -> None:
-        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
-        os.makedirs(folder + my_date, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), folder + my_date + '/policy.model')
-        torch.save(self.target_net.state_dict(), folder + my_date + '/target.model')
+        """
+        Save the model (NN and hyperparameters).
 
-        with open(folder + my_date + '/params.json', 'w') as my_file:
+        Args:
+            folder (str, optional): Where to save the model. Defaults to 'models/'.
+        """
+        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
+        folder_name = folder + my_date + type(self).__name__
+        os.makedirs(folder_name, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), folder_name + '/policy.model')
+        torch.save(self.target_net.state_dict(), folder_name + '/target.model')
+
+        with open(folder_name + '/params.json', 'w') as my_file:
             import params as prm
             my_dict = prm.__dict__
             my_dict = {key : val for key, val in my_dict.items()
@@ -235,6 +248,12 @@ class DQNAgentBase(SuperAgent):
 
 
     def load_model(self, folder : str) -> None:
+        """
+        Load a model (ex: agt.load_model("./models/0605_1015DQNAgentObs"))
+
+        Args:
+            folder (str): Folder to the model
+        """
         self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
         self.target_net.load_state_dict(torch.load(folder + '/target.model'))
         with open(folder + '/params.json') as my_file:
@@ -248,41 +267,42 @@ class DQNAgentObs(DQNAgentBase):
         """
         !!! SPECIFIC TO FROZEN LAKE !!!
         Args:
-            state (torch.Tensor): _description_
-            desc_env (np.ndarray): _description_
+            state (torch.Tensor): number of the tile where the agent stands
+            env_map (np.ndarray): map of the environment
 
         Returns:
-            np.ndarray: _description_
+            np.ndarray: Array of the encoded close tiles
         """
-        TILE_VALUE_ENCODING = {'F':0,
-                               'S':0,
+        TILE_VALUE_ENCODING = {'F':1,
+                               'S':1,
                                'H':-1,
-                               'G':1,
-                               '':-1}
+                               'G':2,
+                               '':0}
 
         state = int(state[0].item())
         result = np.zeros((4,1))
+        map_x, map_y = env_map.shape
 
-        if state - 4 >=0 :
-            tile = env_map[(state-4)//4][(state-4)%4]
+        if state - map_x >=0 :
+            tile = env_map[(state-map_x)//map_x][(state-map_x)%map_x]
         else :
             tile = b''
         result[0] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
-        if state + 4 < 16 :
-            tile = env_map[(state+4)//4][(state+4)%4]
+        if state + map_x < map_x * map_y :
+            tile = env_map[(state+map_x)//map_x][(state+map_x)%map_x]
         else :
             tile = b''
         result[1] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
-        if (state+1)//4 == state//4 :
-            tile = env_map[(state+1)//4][(state+1)%4]
+        if (state+1)//map_x == state//map_x :
+            tile = env_map[(state+1)//map_x][(state+1)%map_x]
         else :
             tile = b''
         result[2] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
-        if (state-1)//4 == state//4 :
-            tile = env_map[(state-1)//4][(state-1)%4]
+        if (state-1)//map_x == state//map_x :
+            tile = env_map[(state-1)//map_x][(state-1)%map_x]
         else :
             tile = b''
         result[3] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
@@ -308,7 +328,8 @@ class DQNAgentObs(DQNAgentBase):
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
-        if sample > eps_threshold:
+
+        if sample > eps_threshold or not self.exploration:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
                 # t.max(1) will return the largest column value of each row.
@@ -335,6 +356,8 @@ class DQNAgentObs(DQNAgentBase):
         Returns:
             losses (list): Calculated Loss
         """
+        if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
+            return
 
         if len(self.memory) < BATCH_SIZE: return 0
 
@@ -390,8 +413,6 @@ class DQNAgentObs(DQNAgentBase):
         #Plotting
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards', self.rewards)
-
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -410,6 +431,11 @@ class DQNAgentObs(DQNAgentBase):
             next_observation = self.prepare_observation(next_state, env_map)
         self.memory.push(observation, action, next_observation, reward)
         self.rewards.append( self.rewards[-1] + reward[0].item() )
+
+        #Plotting
+        if self.steps_done % DISPLAY_EVERY == 0:
+            Plotter().plot_data_gradually('Rewards', self.rewards)
+
         #print(self.rewards)
         #print(reward)
 
