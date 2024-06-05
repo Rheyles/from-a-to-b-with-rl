@@ -19,10 +19,15 @@ class Environment():
         """
         state, info = self.env.reset()
         state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+        env_desc = self.env.unwrapped.desc
 
         for t in count():
             action = agent.select_action(self.env.action_space, state, self.env.get_wrapper_attr('desc'))
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
+
+            if env_desc[observation // self.env.ncol][observation % self.env.ncol] == b'H':
+                reward = -0.1  # Assign negative reward for falling into a hole
+
             reward = torch.tensor([reward], device=DEVICE)
             done = terminated or truncated
 
