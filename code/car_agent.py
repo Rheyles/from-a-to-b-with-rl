@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
+from PIL import Image
 
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 from params import *
 from super_agent import DQNAgent
@@ -20,6 +22,30 @@ class CarDQNAgent(DQNAgent):
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
 
+    def prepro(self, state: torch.Tensor) -> torch.Tensor:
+
+        #state = state.numpy()
+
+        crop_height = int(state.shape[1] * 0.88)
+        state = state[:, :crop_height, :, :]
+
+        #state = Image.open(state).convert("L")
+        #state = np.asarray(state)
+        #plt.imshow(state, cmap='gray', vmin=0, vmax=255)
+        #plt.show()
+
+        r, g, b = state[:, :, :, 0], state[:, :, :, 1], state[:, :, :, 2]
+        # gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+        gray = g // 64
+
+        #plt.imshow(gray.squeeze(0), cmap='gray')
+        #plt.show()
+        #input('COntinue ?')
+
+        return gray.unsqueeze(0)
+
+
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
@@ -33,6 +59,7 @@ class CarDQNAgent(DQNAgent):
         Returns:
             act ActType : Action that the agent performs
         """
+        state = self.prepro(state)
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
@@ -43,8 +70,6 @@ class CarDQNAgent(DQNAgent):
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-
-                state = torch.moveaxis(state,-1,1)
 
                 result = self.policy_net(state)
                 return result.max(1).indices.view(1, 1)
@@ -92,9 +117,6 @@ class CarDQNAgent(DQNAgent):
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
-
-        state_batch = torch.moveaxis(state_batch, -1, 1)
-        non_final_next_states = torch.moveaxis(non_final_next_states, -1, 1)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -154,3 +176,11 @@ class CarDQNAgent(DQNAgent):
                   , end='\r')
 
         return self.losses
+
+    def update_memory(self, state, action, next_state, reward) -> None:
+        state = self.prepro(state)
+        next_state = self.prepro(next_state)
+        self.memory.push(state, action, next_state, reward)
+        self.rewards.append(reward[0].item())
+        #print(self.rewards)
+        #print(reward)
