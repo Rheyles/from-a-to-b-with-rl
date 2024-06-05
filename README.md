@@ -152,3 +152,9 @@ If you are on Linux, you can do :
 
   pip3 install torch torchvision torchaudio
 ```
+
+If you want to monitor the GPU in the terminal, you can type 
+
+```
+  nvidia-smi -l 1
+```
