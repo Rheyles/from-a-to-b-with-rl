@@ -5,11 +5,11 @@ from params import NUM_EPISODES, RENDER_FPS
 import agent, os
 
 # Initialize Environment
-env = Environment(gym.make("FrozenLake-v1",map_name="8x8", render_mode='human', is_slippery=False))
+env = Environment(gym.make("CarRacing-v2",render_mode='human'))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
-agt = agent.DQNAgentObs(4, env.env.action_space.n, exploration=True, training=True)
+agt = agent.CarDQNAgent(0, env.env.action_space.n, dropout_rate=0.1)
 agt.load_model("./models/0605_1015DQNAgentObs")
 
 

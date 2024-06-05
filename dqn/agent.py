@@ -12,7 +12,7 @@ import json
 import os
 
 from params import *
-from network import LinearDQN
+from network import LinearDQN, ConvDQN
 from buffer import ReplayMemory, Transition
 from display import Plotter, dqn_diagnostics, plot_success_rate
 
@@ -37,7 +37,7 @@ class SuperAgent():
         pass
 
 
-class DQNAgentBase(SuperAgent):
+class FrozenDQNAgentBase(SuperAgent):
 
     def __init__(self, x_dim:int, y_dim:int, show_diagnostics=False, **kwargs) -> None:
         """
@@ -244,7 +244,18 @@ class DQNAgentBase(SuperAgent):
             print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))
 
 
-class DQNAgentObs(DQNAgentBase):
+
+class CarDQNAgent(FrozenDQNAgentBase):
+
+    def __init__(self, x_dim: int, y_dim: int, show_diagnostics=False, **kwargs) -> None:
+        super().__init__(x_dim, y_dim, show_diagnostics, **kwargs)
+        self.policy_net = ConvDQN(y_dim, kwargs.get('dropout_rate',0.0))
+        self.target_net = ConvDQN(y_dim, kwargs.get('dropout_rate',0.0))
+
+
+
+
+class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
     def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
         """

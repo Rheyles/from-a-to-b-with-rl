@@ -21,22 +21,21 @@ class LinearDQN(nn.Module):
 
 class ConvDQN(nn.Module):
 
-    def __init__(self, n_actions, drop_out_rate=0.0):
+    def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=drop_out_rate))
+            nn.Dropout(p=dropout_rate))
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=drop_out_rate))
+            nn.Dropout(p=dropout_rate))
         self.lin1 = nn.Sequential(
             nn.Flatten,
             nn.Linear(100, n_actions, bias=True))
-        nn.init.xavier_uniform_(self.fc2.weight)
 
     def forward(self, x):
         out = self.conv1(x)
