@@ -14,5 +14,6 @@ for _ in range(NUM_EPISODES):
 
 
 print(f"Average episode duration: {sum(episode_durations) / len(episode_durations)}")
-input('Press any key to close')
+input('Press any key to close and save the model, if not Ctrl C')
+agt.save_model(path='models/')
 env.env.close()

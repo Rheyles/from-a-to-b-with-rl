@@ -35,12 +35,14 @@ class DQNAgent():
         """
         self.policy_net = DQN(x_dim, y_dim)
         self.target_net = DQN(x_dim, y_dim)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
         self.memory = ReplayMemory(MEM_SIZE)
         self.steps_done = 0
         self.losses = []
         self.rewards = [0]
+        self.eps_threshold = 0
 
     def prepare_observation(state: torch.Tensor, env_map: np.ndarray) -> np.ndarray:
         """
@@ -61,7 +63,7 @@ class DQNAgent():
         return None
 
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -76,10 +78,10 @@ class DQNAgent():
         """
 
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
-        if sample > eps_threshold:
+        if sample > self.eps_threshold:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
                 # t.max(1) will return the largest column value of each row.
@@ -156,6 +158,7 @@ class DQNAgent():
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
         print(f"Loss: {float(loss)}")
         print(f'Reward in batch:  {reward_batch.sum()}')
+        print(f'Epsilon threshold:  {self.eps_threshold}')
 
         self.losses.append(float(loss))
 
@@ -192,19 +195,43 @@ class DQNAgent():
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self, path='model/'):
+    def save_model(self, path='models/'):
         my_date = datetime.strftime(datetime.now(), "%m%d_%h%")
         os.makedirs(path + my_date, exist_ok=True)
         torch.save(self.policy_net.state_dict(), 'models/' + my_date + '/policy.model')
         torch.save(self.target_net.state_dict(), 'models/' + my_date + '/target.model')
 
-        with open(...) as my_file:
-            json.dump(my_dict, my_file)
+        # with open(...) as my_file:
+        #     json.dump(my_dict, my_file)
 
 
     def load_model(self, folder):
-        self.policy_net.load_state_dict('models/' + folder + '/policy.model')
-        self.target_net.load_state_dict('models/' + folder + '/target.model')
-        with open(...) as my_file:
-            hyper_dict = json.load(my_file)
-            print([f"{key} : {val} \n" for key, val in hyper_dict.items])
+        self.policy_net.load_state_dict(torch.load('models/' + folder + '/policy.model'))
+        self.target_net.load_state_dict(torch.load('models/' + folder + '/target.model'))
+        # with open(...) as my_file:
+        #     hyper_dict = json.load(my_file)
+        #     print([f"{key} : {val} \n" for key, val in hyper_dict.items])
+
+
+
+class TestAgent():
+    def __init__(self, x_dim, y_dim) -> None:
+        self.policy_net = DQN(x_dim, y_dim)
+        self.rewards = [0]
+
+    def select_action_for_test(self, state):
+        with torch.no_grad():
+                # torch.no_grad() used when inference on the model is done
+                # t.max(1) will return the largest column value of each row.
+                # second column on max result is index of where max element was
+                # found, so we pick action with the larger expected reward.
+
+                result = self.policy_net(state)
+                return result.max(0).indices.view(1, 1)
+
+    def load_model(self, folder):
+        self.policy_net.load_state_dict(torch.load('models/' + folder + '/policy.model'))
+        self.target_net.load_state_dict(torch.load('models/' + folder + '/target.model'))
+        # with open(...) as my_file:
+        #     hyper_dict = json.load(my_file)
+        #     print([f"{key} : {val} \n" for key, val in hyper_dict.items])

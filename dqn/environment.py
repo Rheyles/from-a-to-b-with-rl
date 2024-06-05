@@ -50,3 +50,36 @@ class Environment():
         print('Complete')
 
         return t
+
+    def run_episode_test(self, agent) -> int:
+        """
+        Runs a single episode of the environment using the provided agent.
+        Store transition in memory and move to the next state.
+        Performance optimization and update target.
+
+        Args:
+            agent (_type_): Component that makes the decision of what action to take
+        """
+        state, info = self.env.reset()
+        state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+
+        for t in count():
+            action = agent.select_action_for_test(state)
+            observation, reward, terminated, truncated, _ = self.env.step(action.item())
+            reward = torch.tensor([reward], device=DEVICE)
+            done = terminated or truncated
+
+            if done:
+                next_state = None
+            else:
+                next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+
+            # Move to the next state
+            state = next_state
+
+            if done:
+                break
+
+        print('Complete')
+
+        return t
