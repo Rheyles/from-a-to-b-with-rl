@@ -107,7 +107,7 @@ class CarDQNAgent(DQNAgent):
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
         future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (5,1)).T
+        rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
             future_state_values[non_final_mask,:] = self.target_net(non_final_next_states)

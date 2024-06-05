@@ -23,8 +23,8 @@ class FrozenDQNAgentBase(DQNAgent):
         """
         super().__init__(**kwargs)
         x_dim = 1
-        self.policy_net = LinearDQN(x_dim, y_dim)
-        self.target_net = LinearDQN(x_dim, y_dim)
+        self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
+        self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
 
@@ -110,8 +110,8 @@ class FrozenDQNAgentBase(DQNAgent):
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32)
-        rewards_tensor = torch.tile(reward_batch, (4,1)).T
+        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32, device = DEVICE)
+        rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
 
         with torch.no_grad():
             future_state_values[non_final_mask,:] = self.target_net(non_final_next_states.unsqueeze(-1))
