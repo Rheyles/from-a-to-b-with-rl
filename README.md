@@ -102,7 +102,7 @@ Type `yes`. You might be asked for either :
 Input them, then normally you should see :
 
 ```
-  >> lewagon@pcbrice >
+  C:/users/lewagon/>
 ```
 
 My machine is a Windows, so some Linux commands will not work (`touch`, maybe even `ls`). But
@@ -124,13 +124,10 @@ Add a new ssh host and follow the instructions of the box that pops up, re-type 
 ```
   ssh lewagon@XXX.XXX.XXX.XXX
 ```
-
-VSCode might ask you to edit the `.ssh` configuration file, I think it cannot
-hurt. It might ask you to save some changes to a config file (so you don't have to retype the ssh command again)
-and then will probably fail once after asking for the remote computer password. Just specify the remote machine is
+VSCode might ask you to save some changes to a config file so you don't have to retype the ssh command again. You can say yes to that. Then, it will probably fail once after asking for the remote computer password. Just specify the remote machine is
 a Windows, and try again, normally it should work !
 
-**/!\** The local account has a lot of privileges, __but__ you cannot access github from it ! So if you need to `git pull`, you will have
+**/!\\** The local account has a lot of privileges, __but__ you cannot access github from it ! So if you need to `git pull`, you will have
 to ask Brice to do it for you (he has a GitHub tunnel). Also : don't clutter the computer.
 
 ### Notes on GPU acceleration :
