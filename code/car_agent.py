@@ -179,6 +179,8 @@ class CarDQNAgent(DQNAgent):
         return self.losses
 
     def update_memory(self, state, action, next_state, reward) -> None:
+        if self.steps_done < 50:
+            return
         state = self.prepro(state)
         next_state = self.prepro(next_state)
         self.memory.push(state, action, next_state, reward)
