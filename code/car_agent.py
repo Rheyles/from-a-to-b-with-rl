@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
+from PIL import Image
 
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 from params import *
 from super_agent import DQNAgent
@@ -15,10 +17,28 @@ class CarDQNAgent(DQNAgent):
 
     def __init__(self, y_dim: int, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
-        self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0))
-
+        self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
+        self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
+        self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
+
+    def prepro(self, state: torch.Tensor) -> torch.Tensor:
+
+        if state is None:
+            return None
+
+        crop_height = int(state.shape[1] * 0.88)
+        state = state[:, :crop_height, :, :]
+
+        r, g, b = state[:, :, :, 0], state[:, :, :, 1], state[:, :, :, 2]
+        gray = g // 64
+
+        #plt.imshow(gray.squeeze(0), cmap='gray')
+        #plt.show()
+        #input('COntinue ?')
+
+        return gray.unsqueeze(0)
+
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -33,24 +53,30 @@ class CarDQNAgent(DQNAgent):
         Returns:
             act ActType : Action that the agent performs
         """
+        state = self.prepro(state)
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
-        self.steps_done+=1 #Update the number of steps within one episode
-        if sample > eps_threshold or not self.exploration:
-            with torch.no_grad():
-                # torch.no_grad() used when inference on the model is done
-                # t.max(1) will return the largest column value of each row.
-                # second column on max result is index of where max element was
-                # found, so we pick action with the larger expected reward.
 
-                state = torch.moveaxis(state,-1,1)
+        if self.steps_done % 10 == 0:
+            self.steps_done+=1 #Update the number of steps within one episode
+            if sample > eps_threshold or not self.exploration:
+                with torch.no_grad():
+                    # torch.no_grad() used when inference on the model is done
+                    # t.max(1) will return the largest column value of each row.
+                    # second column on max result is index of where max element was
+                    # found, so we pick action with the larger expected reward.
 
-                result = self.policy_net(state)
-                return result.max(1).indices.view(1, 1)
+                    result = self.policy_net(state)
+                    action = result.max(1).indices.view(1, 1)
+            else:
+                action = torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
+
+            self.last_action = action
+            return action
         else:
-            return torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
-
+            self.steps_done+=1 #Update the number of steps within one episode
+            return self.last_action
 
     def optimize_model(self) -> list:
         """
@@ -93,9 +119,6 @@ class CarDQNAgent(DQNAgent):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        state_batch = torch.moveaxis(state_batch, -1, 1)
-        non_final_next_states = torch.moveaxis(non_final_next_states, -1, 1)
-
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
@@ -106,8 +129,8 @@ class CarDQNAgent(DQNAgent):
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32)
-        rewards_tensor = torch.tile(reward_batch, (5,1)).T
+        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32, device = DEVICE)
+        rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
             future_state_values[non_final_mask,:] = self.target_net(non_final_next_states)
@@ -154,3 +177,13 @@ class CarDQNAgent(DQNAgent):
                   , end='\r')
 
         return self.losses
+
+    def update_memory(self, state, action, next_state, reward) -> None:
+        if self.steps_done < 50:
+            return
+        state = self.prepro(state)
+        next_state = self.prepro(next_state)
+        self.memory.push(state, action, next_state, reward)
+        self.rewards.append(reward[0].item())
+        #print(self.rewards)
+        #print(reward)

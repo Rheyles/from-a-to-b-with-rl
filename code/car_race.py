@@ -9,7 +9,7 @@ import torch.distributed as dist
 # dist.init_process_group(backend='gloo')
 
 # Initialize Environment
-env = Environment(gym.make("CarRacing-v2",render_mode='rgb_array', continuous=False))
+env = Environment(gym.make("CarRacing-v2",render_mode='human', continuous=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
