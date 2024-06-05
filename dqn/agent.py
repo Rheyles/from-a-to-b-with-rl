@@ -14,12 +14,18 @@ import os
 from params import *
 from network import LinearDQN
 from buffer import ReplayMemory, Transition
-from display import Plotter
+from display import Plotter, dqn_diagnostics, plot_success_rate
 
 class SuperAgent():
     def __init__(self, exploration=True, training=True) -> None:
         self.exploration = exploration
         self.training = training
+        self.steps_done = 0
+        self.episode = 0
+        self.losses = [0]
+        self.rewards = [0]
+        self.episode_rewards = [0]
+        self.episode_duration = [0]
 
     def select_action()-> torch.Tensor:
         pass
@@ -33,12 +39,14 @@ class SuperAgent():
 
 class DQNAgentBase(SuperAgent):
 
-    def __init__(self, x_dim:int, y_dim:int, **kwargs) -> None:
+    def __init__(self, x_dim:int, y_dim:int, show_diagnostics=False, **kwargs) -> None:
         """
 
         Args:
             x_dim (int): Size of model input
             y_dim (int): Size of model output
+            show_diagnostics (bool): Whether you want to show detailed info
+            on the DQN network while it works. Defaults to False
         """
         super().__init__(kwargs.get('exploration',True), kwargs.get('training',True))
         self.policy_net = LinearDQN(x_dim, y_dim)
@@ -46,9 +54,7 @@ class DQNAgentBase(SuperAgent):
 
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
         self.memory = ReplayMemory(MEM_SIZE)
-        self.steps_done = 0
-        self.losses = []
-        self.rewards = [0]
+        self.show_diagnostics = show_diagnostics
 
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor, _env_map: np.ndarray) -> torch.Tensor:
@@ -155,7 +161,8 @@ class DQNAgentBase(SuperAgent):
 
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards', self.rewards)
+            Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True)
+            Plotter().plot_data_gradually('RewardRate', self.episode_rewards, rolling=30)
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -164,49 +171,25 @@ class DQNAgentBase(SuperAgent):
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        show_diagnostics = False
-        if show_diagnostics:
+        if self.show_diagnostics:
+            dqn_diagnostics(self, action_batch, best_action,
+                            state_batch, reward_batch, all_next_states,
+                            state_action_values,future_state_values,
+                            best_action_values)
+        else:
+            eps = EPS_END + (EPS_START - EPS_END) \
+                * np.exp(- self.steps_done / EPS_DECAY)
 
-            with torch.no_grad():
-                action_dict = {0:'←', 1:'↓', 2:'→', 3:'↑'}
-                action_arrows = [action_dict[elem.item()] for elem in action_batch]
-                best_act_arrs = [action_dict[elem.item()] for elem in best_action]
-
-                states_str     = 'Current state ' + ' | '.join([f"{elem:5.0f}" for elem in state_batch])
-                action_str     = 'Current action' + ' | '.join([f"    {elem}"   for elem in action_arrows])
-                reward_str     = 'Reward (s,a)  ' + ' | '.join([f"{elem:5.0f}" for elem in reward_batch])
-                next_state_str = 'Future state  ' + ' | '.join([f"{elem:5.0f}"  for elem in all_next_states])
-                current_Q_str  = 'Current Q     ' + ' | '.join([f"{elem:+4.2f}" for elem in torch.squeeze(state_action_values)])
-                Q_left_str     = 'Estimated Q ← ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,0]])
-                Q_down_str     = 'Estimated Q ↓ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,1]])
-                Q_right_str    = 'Estimated Q → ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,2]])
-                Q_up_str       = 'Estimated Q ↑ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,3]])
-                expected_Q_str = 'Best known Q  ' + ' | '.join([f"{elem:+4.2f}" for elem in best_action_values])
-                best_act_str   = 'Bst futr actn ' + ' | '.join([f"    {elem}"   for elem in best_act_arrs])
-
-                eps = EPS_END + (EPS_START - EPS_END) * np.exp(-self.steps_done / EPS_DECAY)
-
-                print("\033[A"*16)
-                print(f'\nStep {self.steps_done:4.0f}, \t loss : {float(loss):5.2e}, \t rewards : {self.rewards[-1]:3.0f}, \t epsilon : {eps:.3f}')
-                print('-'*len(states_str))
-                print(states_str)
-                print(action_str)
-                print(reward_str)
-                print(next_state_str)
-                print(current_Q_str)
-                print(Q_left_str)
-                print(Q_down_str)
-                print(Q_right_str)
-                print(Q_up_str)
-                print(expected_Q_str)
-                print(best_act_str)
-                print('-'*len(states_str))
+            print(f'Step : {self.steps_done:5.0f} \t' \
+                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
+                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
+                  , end='\r')
 
         return self.losses
 
     def update_memory(self, state, action, next_state, reward, _env_map) -> None:
         self.memory.push(state, action, next_state, reward)
-        self.rewards.append( self.rewards[-1] + reward[0].item() )
+        self.rewards.append(reward[0].item())
         #print(self.rewards)
         #print(reward)
 
@@ -413,6 +396,10 @@ class DQNAgentObs(DQNAgentBase):
         #Plotting
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
+            # print(type(self.losses))
+            plot_success_rate(self.episode_rewards)
+
+
 
         # Optimize the model
         self.optimizer.zero_grad()

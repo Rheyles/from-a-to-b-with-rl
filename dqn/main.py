@@ -13,16 +13,16 @@ agt = agent.DQNAgentObs(4, env.env.action_space.n, exploration=True, training=Tr
 agt.load_model("./models/0605_1015DQNAgentObs")
 
 
-episode_durations = []
 for _ in range(NUM_EPISODES):
-    agt.steps_done = sum(episode_durations)
-    episode_durations.append(env.run_episode(agt))
+    agt.episode_duration.append(env.run_episode(agt))
+    agt.episode_rewards.append(agt.rewards[-1])
+    agt.episode += 1
 
 save_model = input("Save model ? [y/N]")
 if save_model=="y":
     agt.save_model()
     print("Model saved !")
 
-print(f"Average episode duration: {sum(episode_durations) / len(episode_durations)}")
+print(f"Average episode duration: {sum(agt.episode_duration) / len(agt.episode_duration) }")
 input('Press any key to close')
 env.env.close()
