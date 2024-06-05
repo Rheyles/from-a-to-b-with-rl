@@ -49,7 +49,7 @@ class Plotter():
         else:
             ax = plt.figure(cls.fig_data_list.index(data_name) + 1).gca()
             ax._children[0].set_data(np.arange(len(data)), data)
-            ax.axis([0, len(data)+1, 0, max(data)+0.001])
+            ax.axis([0, len(data)+1, min(data)-0.0001, max(data)+0.001])
 
         plt.pause(0.001)  # pause a bit so that plots are updated
 
