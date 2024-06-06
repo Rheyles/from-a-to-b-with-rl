@@ -55,7 +55,7 @@ class Environment():
 
     def run_episode_memory(self, agent) -> int:
         """
-        Runs a single episode of the environment using the provided agent.
+        Runs a single episode of the environment using the provided agent. With a multiframed input
         Store transition in memory and move to the next state.
         Performance optimization and update target.
 
@@ -65,13 +65,13 @@ class Environment():
         state, info = self.env.reset()
         state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
         batch = []
-        for _ in range(MULTIFRAME):
+        for _ in range(MULTIFRAME): #Creates a batch of mutiple frames
             batch.append(state)
 
 
         for t in count():
 
-            state = torch.cat(batch, -1).to(DEVICE)
+            state = torch.cat(batch, -1).to(DEVICE) #Transforms batch into right format
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
@@ -79,12 +79,11 @@ class Environment():
 
             if done:
                 next_state = None
-            else:
+            else: #Creates the next state by appending the new observation, popping the first one from the list
+                # and then transforming it to the right format
                 batch.append(torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0))
                 batch.pop(0)
                 next_state = torch.cat(batch,-1)
-                print('toto')
-                print(next_state.shape)
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')

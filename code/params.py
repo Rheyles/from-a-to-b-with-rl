@@ -37,4 +37,6 @@ LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
-MULTIFRAME = 1
+
+#MULTIFRAME is the amount of frames you feed into the network
+MULTIFRAME = 3
