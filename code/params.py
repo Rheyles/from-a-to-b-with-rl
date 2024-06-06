@@ -40,3 +40,6 @@ IDLENESS = 3
 
 #MULTIFRAME is the amount of frames you feed into the network
 MULTIFRAME = 3
+
+# Patience of the scheduler that decrease the learning rate in the car race env
+CAR_SCHEDULER_PATIENCE = 25
