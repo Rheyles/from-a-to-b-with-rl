@@ -100,7 +100,6 @@ class DQNAgent(SuperAgent):
     def load_model(self, folder : str) -> None:
         """
         Load a model (ex: agt.load_model("./models/0605_1015DQNAgentObs"))
-
         Args:
             folder (str): Folder to the model
         """
