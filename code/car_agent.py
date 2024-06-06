@@ -15,7 +15,7 @@ from display import Plotter, dqn_diagnostics
 
 class CarDQNAgent(DQNAgent):
 
-    def __init__(self, y_dim: int, reward_threshold:float=500, **kwargs) -> None:
+    def __init__(self, y_dim: int, reward_threshold:float=20, **kwargs) -> None:
         super().__init__(**kwargs)
         self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
@@ -28,11 +28,16 @@ class CarDQNAgent(DQNAgent):
 
 
     def end_episode(self, episode_duration:int) -> None:
+        """
+        All the actions to proceed when an episode is over
+
+        Args:
+            episode_duration (int): length of the episode
+        """
         self.episode_duration.append(episode_duration)
         self.episode_rewards.append(sum(self.rewards[-1000:]))
         self.episode += 1
         self.scheduler.step(self.episode_rewards[-1])
-        print(self.episode_rewards)
         if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
                 self.max_reward = self.episode_rewards[-1]
                 self.save_model()
@@ -187,10 +192,10 @@ class CarDQNAgent(DQNAgent):
             eps = EPS_END + (EPS_START - EPS_END) \
                 * np.exp(- self.steps_done / EPS_DECAY)
 
-            # print(f'Step : {self.steps_done:5.0f} \t' \
-            #     + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-            #     + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-            #       , end='\r')
+            print(f'Step : {self.steps_done:5.0f} \t' \
+                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
+                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
+                  , end='\r')
 
         return self.losses
 

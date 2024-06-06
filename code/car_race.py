@@ -18,9 +18,7 @@ agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 
 
 for _ in range(NUM_EPISODES):
-    agt.episode_duration.append(env.run_episode(agt))
-    agt.episode_rewards.append(agt.rewards[-1])
-    agt.episode += 1
+    agt.end_episode(env.run_episode(agt))
 
 save_model = input("Save model ? [y/N]")
 if save_model=="y":
