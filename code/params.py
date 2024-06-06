@@ -1,5 +1,14 @@
 import torch
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # if GPU is to be used
+
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+else:
+    try:
+        torch.backends.mps.is_available()
+        DEVICE = torch.device("mps")
+    except:
+        DEVICE = torch.device('cpu')
+
 RENDER_FPS = 200
 NUM_EPISODES = 1000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
