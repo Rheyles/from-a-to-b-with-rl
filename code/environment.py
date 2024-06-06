@@ -36,6 +36,7 @@ class Environment():
             if reset is not None :
                 if reset:
                     break
+            agent.logging()
 
             # Move to the next state
             state = next_state

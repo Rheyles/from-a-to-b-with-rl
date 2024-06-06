@@ -16,14 +16,16 @@ env.env.metadata['render_fps'] = RENDER_FPS
 agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 # agt.load_model("./models/0605_1015DQNAgentObs")
 
-
-for _ in range(NUM_EPISODES):
-    agt.end_episode(env.run_episode(agt))
-
-save_model = input("Save model ? [y/N]")
-if save_model=="y":
-    agt.save_model()
-    print("Model saved !")
+try:
+    for _ in range(NUM_EPISODES):
+        agt.end_episode(env.run_episode(agt))
+        
+except KeyboardInterrupt:
+    print('Interrupted w. Keyboard !')
+    save_model = input("Save model ? [y/N]")
+    if save_model.lower() == "y":
+        agt.save_model()
+        print("Model saved !")
 
 print(f"Average episode duration: {sum(agt.episode_duration) / len(agt.episode_duration) }")
 input('Press any key to close')
