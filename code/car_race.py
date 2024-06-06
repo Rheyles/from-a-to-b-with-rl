@@ -7,12 +7,13 @@ import car_agent as agent
 # Initialize Environment
 env = Environment(gym.make("CarRacing-v2",render_mode='rgb_array', continuous=False))
 env.env.metadata['render_fps'] = RENDER_FPS
-print('\n~~~~~CAR RACING USING {DEVICE} ~~~~~')
+print(f'\n~~~~~CAR RACING USING {DEVICE} ~~~~~')
 
 # Initialize Agent
 agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 # agt.load_model("./models/0605_1015DQNAgentObs")
 
+#If run_episode is called, check the value of the variable MULTIFRAME, has to be set to 1 to work
 try:
     for _ in range(NUM_EPISODES):
         env.run_episode(agt)

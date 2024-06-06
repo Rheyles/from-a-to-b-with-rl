@@ -39,7 +39,8 @@ LR = 1e-1
 IDLENESS = 3
 
 #MULTIFRAME is the amount of frames you feed into the network
-MULTIFRAME = 3
+# HAS TO BE SET TO 1 if the method run_episode is called in the main
+MULTIFRAME = 1
 
 # Patience of the scheduler that decrease the learning rate in the car race env
 CAR_SCHEDULER_PATIENCE = 25

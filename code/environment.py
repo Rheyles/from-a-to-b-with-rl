@@ -14,6 +14,8 @@ class Environment():
         Store transition in memory and move to the next state.
         Performance optimization and update target.
 
+        CHECK VALUE OF MULTIFRAME global variable. Has to be set to 1 for this method to be called correctly
+
         Args:
             agent (_type_): Component that makes the decision of what action to take
         """
