@@ -15,8 +15,6 @@ agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 
 try:
     for _ in range(NUM_EPISODES):
-        agt.end_episode(env.run_episode_memory(agt))
-
         env.run_episode(agt)
         agt.end_episode()
 
