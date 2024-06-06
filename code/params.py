@@ -1,7 +1,7 @@
 import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # if GPU is to be used
 RENDER_FPS = 150
-NUM_EPISODES = 1000
+NUM_EPISODES = 800
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
 
 # MEM_SIZE is the size of the ReplayMemory buffer
@@ -25,3 +25,6 @@ TAU = 0.02
 
 # LR is the learning rate of the ``AdamW`` optimizer
 LR = 1e-3
+
+# IDLENESS is the amount where agent choose the same action
+IDLENESS = 10

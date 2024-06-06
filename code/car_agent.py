@@ -21,6 +21,7 @@ class CarDQNAgent(DQNAgent):
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
+        self.idleness = IDLENESS
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
 
@@ -58,7 +59,7 @@ class CarDQNAgent(DQNAgent):
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
 
-        if self.steps_done % 10 == 0:
+        if self.steps_done % self.idleness == 0:
             self.steps_done+=1 #Update the number of steps within one episode
             if sample > eps_threshold or not self.exploration:
                 with torch.no_grad():
