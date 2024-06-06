@@ -32,7 +32,10 @@ class Environment():
                 next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
 
             # Store the transition in memory
-            agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            if reset is not None :
+                if reset:
+                    break
             agent.logging()
 
             # Move to the next state
