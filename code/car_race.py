@@ -9,7 +9,7 @@ import torch.distributed as dist
 # dist.init_process_group(backend='gloo')
 
 # Initialize Environment
-env = Environment(gym.make("CarRacing-v2",render_mode='human', continuous=False))
+env = Environment(gym.make("CarRacing-v2",render_mode='rgb_array', continuous=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
@@ -18,7 +18,8 @@ agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 
 
 for _ in range(NUM_EPISODES):
-    agt.end_episode(env.run_episode(agt))
+    env.run_episode(agt)
+    agt.end_episode()
 
 save_model = input("Save model ? [y/N]")
 if save_model=="y":

@@ -21,7 +21,7 @@ class CarDQNAgent(DQNAgent):
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=3)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=25)
         self.episode_reward = 0
         self.reward_threshold = reward_threshold
         self.max_reward = 0
@@ -30,14 +30,16 @@ class CarDQNAgent(DQNAgent):
 
 
 
-    def end_episode(self, episode_duration:int) -> None:
+    def end_episode(self) -> None:
         """
         All the actions to proceed when an episode is over
 
         Args:
             episode_duration (int): length of the episode
         """
-        self.episode_rewards.append(sum(self.rewards[sum(self.episode_duration):]))
+        self.episode_rewards.append(sum(self.rewards[-1 * self.episode_duration[-1]:]))
+        print(-1 * self.episode_duration[-1])
+        print(self.episode_rewards)
         self.episode_duration.append(0)
         self.episode += 1
         self.scheduler.step(self.episode_rewards[-1])
@@ -197,20 +199,21 @@ class CarDQNAgent(DQNAgent):
             eps = EPS_END + (EPS_START - EPS_END) \
                 * np.exp(- self.steps_done / EPS_DECAY)
 
-            print(f'Step : {self.steps_done:5.0f} \t' \
-                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-                  , end='\r')
+            # print(f'Step : {self.steps_done:5.0f} \t' \
+            #     + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
+            #     + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
+            #       , end='\r')
 
         return self.losses
 
     def update_memory(self, state, action, next_state, reward) -> None:
-        if self.steps_done < 50:
+        self.rewards.append(reward[0].item())
+
+        if self.episode_duration[-1] < 50: # On ne met pas en mémoire le zoom de début d'épisode
             return None
 
         state = self.prepro(state)
         next_state = self.prepro(next_state)
-        self.rewards.append(reward[0].item())
 
         if sum(self.rewards[-1*min(self.reset_patience,self.episode_duration[-1]):]) <= (self.reset_patience-1)*-0.1:
             reward[0]=-100

@@ -37,3 +37,6 @@ LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
+
+# Patience of the scheduler that decrease the learning rate in the car race env
+CAR_SCHEDULER_PATIENCE = 25
