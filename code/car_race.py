@@ -21,10 +21,12 @@ for _ in range(NUM_EPISODES):
     env.run_episode(agt)
     agt.end_episode()
 
-save_model = input("Save model ? [y/N]")
-if save_model=="y":
-    agt.save_model()
-    print("Model saved !")
+except KeyboardInterrupt:
+    print('Interrupted w. Keyboard !')
+    save_model = input("Save model ? [y/N]")
+    if save_model.lower() == "y":
+        agt.save_model(add_episode=True)
+        print("Model saved !")
 
 print(f"Average episode duration: {sum(agt.episode_duration) / len(agt.episode_duration) }")
 input('Press any key to close')

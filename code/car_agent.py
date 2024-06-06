@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from PIL import Image
@@ -5,6 +6,7 @@ from PIL import Image
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 from params import *
 from super_agent import DQNAgent
@@ -21,16 +23,29 @@ class CarDQNAgent(DQNAgent):
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
+<<<<<<< HEAD
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=25)
+=======
+
+        self.folder = 'models/' \
+            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
+            + str(self.__class__.__name__) + '/'
+
+        os.makedirs(self.folder, exist_ok=True)
+
+>>>>>>> 63089df29375e8c850c7c844629e890dbbc437a9
         self.episode_reward = 0
         self.reward_threshold = reward_threshold
         self.max_reward = 0
-
         self.reset_patience = reset_patience
 
+<<<<<<< HEAD
 
 
     def end_episode(self) -> None:
+=======
+    def end_episode(self, episode_duration:int) -> None:
+>>>>>>> 63089df29375e8c850c7c844629e890dbbc437a9
         """
         All the actions to proceed when an episode is over
 
@@ -46,7 +61,6 @@ class CarDQNAgent(DQNAgent):
         if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
             self.max_reward = self.episode_rewards[-1]
             self.save_model()
-
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
 
@@ -77,17 +91,18 @@ class CarDQNAgent(DQNAgent):
             state (gym.ObsType): Observation
 
         Returns:
-            act ActType : Action that the agent performs
+            act ActType : Action that the self performs
         """
         state = self.prepro(state)
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        self.epsilon = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
+        self.time = (datetime.now() - self.creation_time).total_seconds()
 
         if self.steps_done % IDLENESS == 0:
             self.steps_done+=1 #Update the number of steps within one episode
             self.episode_duration[-1]+=1 #Update the duration of the current episode
-            if sample > eps_threshold or not self.exploration:
+            if sample > self.epsilon or not self.exploration:
                 with torch.no_grad():
                     # torch.no_grad() used when inference on the model is done
                     # t.max(1) will return the largest column value of each row.
@@ -196,13 +211,21 @@ class CarDQNAgent(DQNAgent):
                             state_action_values,future_state_values,
                             best_action_values)
         else:
-            eps = EPS_END + (EPS_START - EPS_END) \
-                * np.exp(- self.steps_done / EPS_DECAY)
 
+<<<<<<< HEAD
             # print(f'Step : {self.steps_done:5.0f} \t' \
             #     + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
             #     + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
             #       , end='\r')
+=======
+            tot_rwd = sum(self.rewards)
+            lr = self.scheduler.optimizer.param_groups[0]['lr']
+            print(f'  🏎️  🏎️   || t {self.time:7.1f} |' \
+                + f' Step {self.steps_done:7.0f} |' \
+                + f' Episode {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
+                + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |'\
+                + f' η {lr:.2e} | Tot. Reward {tot_rwd:7.2f}', end='\r')
+>>>>>>> 63089df29375e8c850c7c844629e890dbbc437a9
 
         return self.losses
 
@@ -224,3 +247,32 @@ class CarDQNAgent(DQNAgent):
         self.memory.push(state, action, next_state, reward)
 
         return None
+
+
+    def logging(self):
+        """Logs some statistics on the agent running as a function of time
+        in a .csv file"""
+
+        if not os.path.exists(self.folder + 'log.csv'):
+            with open(self.folder + 'log.csv', 'w') as log_file:
+                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon\n')
+
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        self.log_buffer.append([self.time,
+                                     self.steps_done,
+                                     self.episode,
+                                     self.losses[-1],
+                                     self.rewards[-1],
+                                     lr,
+                                     self.epsilon])
+
+        if self.steps_done % self.log_every == 0:
+            array_test = np.vstack(self.log_buffer)
+            self.log_buffer = []
+
+            with open(self.folder + 'log.csv', 'a') as myfile:
+                np.savetxt(myfile, array_test, delimiter=',',
+                           fmt=["%7.2f", "%6d", "%4d",
+                                "%5.3e", "%5.3e", "%5.3e",
+                                "%5.3e"])
