@@ -1,10 +1,8 @@
+import os
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import typing
-import sys
 from params import *
-
 
 class Plotter():
 
@@ -62,14 +60,6 @@ class Plotter():
             plt.show()
 
         return ax
-
-
-def plot_success_rate(episode_rewards:list, rolling=10):
-
-    roll_rewards = np.convolve(np.array(episode_rewards),
-                               np.ones(rolling)/rolling, mode='same')
-    ax = Plotter().plot_data_gradually('RollingRewards', data=roll_rewards)
-
 
 def dqn_diagnostics(agent,
                     action_batch:torch.Tensor,

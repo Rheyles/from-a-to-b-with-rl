@@ -33,6 +33,7 @@ class Environment():
 
             # Store the transition in memory
             agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            agent.logging()
 
             # Move to the next state
             state = next_state

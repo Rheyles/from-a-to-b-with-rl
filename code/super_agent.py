@@ -11,6 +11,14 @@ class SuperAgent():
         self.exploration = kwargs.get('exploration',True)
         self.training = kwargs.get('training',True)
         self.show_diagnostics = kwargs.get('show_diagnostics',False)
+        self.creation_time = datetime.now()
+        self.time = (datetime.now() - self.creation_time).total_seconds()
+        self.log_every = kwargs.get('log_every', 100)
+        self.log_buffer = []
+        self.folder = 'models/' \
+            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
+            + str(self.__class__.__name__) + '/'
+
 
         self.steps_done = 0
         self.episode = 0
@@ -37,6 +45,7 @@ class DQNAgent(SuperAgent):
         super().__init__(**kwargs)
         self.policy_net = None
         self.target_net = None
+        self.epsilon = EPS_START
 
     def update_memory(self, state, action, next_state, reward) -> None:
         self.memory.push(state, action, next_state, reward)
@@ -57,20 +66,19 @@ class DQNAgent(SuperAgent):
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self, folder='models/') -> None:
+    def save_model(self) -> None:
         """
         Save the model (NN and hyperparameters).
 
         Args:
             folder (str, optional): Where to save the model. Defaults to 'models/'.
         """
-        my_date = datetime.strftime(datetime.now(), "%m%d_%H%M")
-        folder_name = folder + my_date + type(self).__name__
-        os.makedirs(folder_name, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), folder_name + '/policy.model')
-        torch.save(self.target_net.state_dict(), folder_name + '/target.model')
 
-        with open(folder_name + '/params.json', 'w') as my_file:
+        os.makedirs(self.folder, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), self.folder + '/policy.model')
+        torch.save(self.target_net.state_dict(), self.folder + '/target.model')
+
+        with open(self.folder + '/params.json', 'w') as my_file:
             import params as prm
             my_dict = prm.__dict__
             my_dict = {key : val for key, val in my_dict.items()
