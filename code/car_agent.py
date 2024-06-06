@@ -42,8 +42,8 @@ class CarDQNAgent(DQNAgent):
         self.episode += 1
         self.scheduler.step(self.episode_rewards[-1])
         if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
-                self.max_reward = self.episode_rewards[-1]
-                self.save_model()
+            self.max_reward = self.episode_rewards[-1]
+            self.save_model()
 
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
