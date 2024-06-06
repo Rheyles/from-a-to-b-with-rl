@@ -2,6 +2,7 @@ import torch
 from datetime import datetime
 import json
 import os
+import glob
 
 from params import *
 from buffer import ReplayMemory
@@ -35,8 +36,8 @@ class SuperAgent():
         pass
     def save_model():
         pass
-    def load_model():
-        pass
+    # def load_model():
+    #     pass
 
 
 class DQNAgent(SuperAgent):
@@ -103,8 +104,12 @@ class DQNAgent(SuperAgent):
         Args:
             folder (str): Folder to the model
         """
-        self.policy_net.load_state_dict(torch.load(folder + '/policy.model'))
-        self.target_net.load_state_dict(torch.load(folder + '/target.model'))
+
+        policy_file = glob.glob(folder + '/policy_*.model')[-1]
+        target_file = glob.glob(folder + '/target_*.model')[-1]
+        self.policy_net.load_state_dict(torch.load(policy_file, map_location=DEVICE))
+        self.target_net.load_state_dict(torch.load(target_file, map_location=DEVICE))
         with open(folder + '/params.json') as my_file:
+            print(f'Loaded model {policy_file} from {folder}')
             hyper_dict = json.load(my_file)
             print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))

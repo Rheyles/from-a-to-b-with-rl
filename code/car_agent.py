@@ -31,7 +31,6 @@ class CarDQNAgent(DQNAgent):
 
         os.makedirs(self.folder, exist_ok=True)
 
-        self.episode_reward = 0
         self.reward_threshold = reward_threshold
         self.max_reward = 0
         self.reset_patience = reset_patience
@@ -201,13 +200,13 @@ class CarDQNAgent(DQNAgent):
                             best_action_values)
         else:
 
-            tot_rwd = sum(self.rewards)
+            tot_rwd = self.episode_rewards[-1]
             lr = self.scheduler.optimizer.param_groups[0]['lr']
             print(f'  🏎️  🏎️   || t {self.time:7.1f} |' \
                 + f' Step {self.steps_done:7.0f} |' \
-                + f' Episode {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
+                + f' Ep. {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
                 + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |'\
-                + f' η {lr:.2e} | Tot. Reward {tot_rwd:7.2f}', end='\r')
+                + f' η {lr:.2e} | Rwd/ep {tot_rwd:7.2f}', end='\r')
 
         return self.losses
 
