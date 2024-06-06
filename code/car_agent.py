@@ -37,6 +37,9 @@ class CarDQNAgent(DQNAgent):
 
         self.reset_patience = reset_patience
 
+        self.batch = []
+        self.multiframes = 3
+
 
 
     def end_episode(self, episode_duration:int) -> None:
@@ -58,18 +61,20 @@ class CarDQNAgent(DQNAgent):
 
         if state is None:
             return None
+        #print(state.shape)
 
         crop_height = int(state.shape[1] * 0.88)
         state = state[:, :crop_height, :, :]
-
-        r, g, b = state[:, :, :, 0], state[:, :, :, 1], state[:, :, :, 2]
-        gray = g // 64
+        mf = self.multiframes
+        r, g, b = state[:, :, :, 0::mf], state[:, :, :, 1::mf], state[:, :, :, 2::mf]
+        gray = (g // 16) / 16
+        gray = torch.moveaxis(gray, -1, 1)
 
         #plt.imshow(gray.squeeze(0), cmap='gray')
         #plt.show()
         #input('COntinue ?')
-
-        return gray.unsqueeze(0)
+        #print(gray.unsqueeze(0).shape)
+        return gray
 
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -154,6 +159,7 @@ class CarDQNAgent(DQNAgent):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
+
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
@@ -228,6 +234,7 @@ class CarDQNAgent(DQNAgent):
             return True
 
         self.memory.push(state, action, next_state, reward)
+
 
         return None
 

@@ -9,7 +9,7 @@ else:
     except:
         DEVICE = torch.device('cpu')
 
-RENDER_FPS = 200
+RENDER_FPS = 60
 NUM_EPISODES = 1000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
 
@@ -37,3 +37,4 @@ LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
+MULTIFRAME = 1
