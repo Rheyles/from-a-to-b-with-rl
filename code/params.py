@@ -24,7 +24,7 @@ EPS_DECAY = 100000
 TAU = 0.02
 
 # LR is the learning rate of the ``AdamW`` optimizer
-LR = 1e-3
+LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 10

@@ -1,5 +1,4 @@
 import gymnasium as gym
-from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 from environment import Environment
 from params import NUM_EPISODES, RENDER_FPS
 import frozen_agent as agent
