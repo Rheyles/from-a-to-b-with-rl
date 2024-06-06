@@ -21,6 +21,7 @@ class CarDQNAgent(DQNAgent):
         super().__init__(**kwargs)
         self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
         self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=CAR_SCHEDULER_PATIENCE)
@@ -205,11 +206,12 @@ class CarDQNAgent(DQNAgent):
 
             tot_rwd = sum(self.rewards)
             lr = self.scheduler.optimizer.param_groups[0]['lr']
+
             print(f'  🏎️  🏎️   || t {self.time:7.1f} |' \
                 + f' Step {self.steps_done:7.0f} |' \
                 + f' Episode {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
-                + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |'\
-                + f' η {lr:.2e} | Tot. Reward {tot_rwd:7.2f}', end='\r')
+                + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |' \
+                + f' η {lr:.2e} | Reward/Ep {self.episode_rewards[-1]:7.2f}', end='\r')
 
         return self.losses
 
