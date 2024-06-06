@@ -197,10 +197,10 @@ class CarDQNAgent(DQNAgent):
             eps = EPS_END + (EPS_START - EPS_END) \
                 * np.exp(- self.steps_done / EPS_DECAY)
 
-            # print(f'Step : {self.steps_done:5.0f} \t' \
-            #     + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-            #     + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-            #       , end='\r')
+            print(f'Step : {self.steps_done:5.0f} \t' \
+                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
+                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
+                  , end='\r')
 
         return self.losses
 
