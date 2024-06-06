@@ -82,7 +82,7 @@ class CarDQNAgent(DQNAgent):
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
 
-        if self.steps_done % 10 == 0:
+        if self.steps_done % IDLENESS == 0:
             self.steps_done+=1 #Update the number of steps within one episode
             self.episode_duration[-1]+=1 #Update the duration of the current episode
             if sample > eps_threshold or not self.exploration:

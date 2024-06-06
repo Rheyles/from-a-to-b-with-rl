@@ -36,4 +36,4 @@ TAU = 0.02
 LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
-IDLENESS = 10
+IDLENESS = 3
