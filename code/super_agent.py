@@ -67,7 +67,7 @@ class DQNAgent(SuperAgent):
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def save_model(self) -> None:
+    def save_model(self, add_episode=True) -> None:
         """
         Save the model (NN and hyperparameters).
 
@@ -75,9 +75,15 @@ class DQNAgent(SuperAgent):
             folder (str, optional): Where to save the model. Defaults to 'models/'.
         """
 
+        episode_str = ''
+        if add_episode:
+            episode_str = f'_{self.episode}'
+
         os.makedirs(self.folder, exist_ok=True)
-        torch.save(self.policy_net.state_dict(), self.folder + '/policy.model')
-        torch.save(self.target_net.state_dict(), self.folder + '/target.model')
+        torch.save(self.policy_net.state_dict(),
+                   f'{self.folder}/policy{episode_str}.model')
+        torch.save(self.target_net.state_dict(),
+                   f'{self.folder}/target{episode_str}.model')
 
         with open(self.folder + '/params.json', 'w') as my_file:
             import params as prm

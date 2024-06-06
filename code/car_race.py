@@ -19,12 +19,12 @@ agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
 try:
     for _ in range(NUM_EPISODES):
         agt.end_episode(env.run_episode(agt))
-        
+
 except KeyboardInterrupt:
     print('Interrupted w. Keyboard !')
     save_model = input("Save model ? [y/N]")
     if save_model.lower() == "y":
-        agt.save_model()
+        agt.save_model(add_episode=True)
         print("Model saved !")
 
 print(f"Average episode duration: {sum(agt.episode_duration) / len(agt.episode_duration) }")

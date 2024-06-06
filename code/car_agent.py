@@ -34,10 +34,7 @@ class CarDQNAgent(DQNAgent):
         self.episode_reward = 0
         self.reward_threshold = reward_threshold
         self.max_reward = 0
-
         self.reset_patience = reset_patience
-
-
 
     def end_episode(self, episode_duration:int) -> None:
         """
@@ -203,13 +200,14 @@ class CarDQNAgent(DQNAgent):
                             state_action_values,future_state_values,
                             best_action_values)
         else:
-            eps = EPS_END + (EPS_START - EPS_END) \
-                * np.exp(- self.steps_done / EPS_DECAY)
 
-            print(f'Step : {self.steps_done:5.0f} \t' \
-                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-                  , end='\r')
+            tot_rwd = sum(self.rewards)
+            lr = self.scheduler.optimizer.param_groups[0]['lr']
+            print(f'  🏎️  🏎️   || t {self.time:7.1f} |' \
+                + f' Step {self.steps_done:7.0f} |' \
+                + f' Episode {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
+                + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |'\
+                + f' η {lr:.2e} | Tot. Reward {tot_rwd:7.2f}', end='\r')
 
         return self.losses
 
