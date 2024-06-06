@@ -15,7 +15,7 @@ from display import Plotter, dqn_diagnostics
 
 class CarDQNAgent(DQNAgent):
 
-    def __init__(self, y_dim: int, reward_threshold:float=20, **kwargs) -> None:
+    def __init__(self, y_dim: int, reward_threshold:float=20, reset_patience:int=250, **kwargs) -> None:
         super().__init__(**kwargs)
         self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
@@ -23,8 +23,11 @@ class CarDQNAgent(DQNAgent):
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=3)
         self.episode_reward = 0
-        self.reward_threshold = 0
+        self.reward_threshold = reward_threshold
         self.max_reward = 0
+
+        self.reset_patience = reset_patience
+
 
 
     def end_episode(self, episode_duration:int) -> None:
@@ -34,8 +37,8 @@ class CarDQNAgent(DQNAgent):
         Args:
             episode_duration (int): length of the episode
         """
-        self.episode_duration.append(episode_duration)
-        self.episode_rewards.append(sum(self.rewards[-1000:]))
+        self.episode_rewards.append(sum(self.rewards[sum(self.episode_duration):]))
+        self.episode_duration.append(0)
         self.episode += 1
         self.scheduler.step(self.episode_rewards[-1])
         if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
@@ -81,6 +84,7 @@ class CarDQNAgent(DQNAgent):
 
         if self.steps_done % 10 == 0:
             self.steps_done+=1 #Update the number of steps within one episode
+            self.episode_duration[-1]+=1 #Update the duration of the current episode
             if sample > eps_threshold or not self.exploration:
                 with torch.no_grad():
                     # torch.no_grad() used when inference on the model is done
@@ -97,6 +101,7 @@ class CarDQNAgent(DQNAgent):
             return action
         else:
             self.steps_done+=1 #Update the number of steps within one episode
+            self.episode_duration[-1]+=1 #Update the duration of the current episode
             return self.last_action
 
     def optimize_model(self) -> list:
@@ -173,7 +178,7 @@ class CarDQNAgent(DQNAgent):
 
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True, cum_episode=1000)
+            Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True, episode_durations=self.episode_duration)
             Plotter().plot_data_gradually('Reward per Episode', self.episode_rewards)
 
         # Optimize the model
@@ -192,19 +197,27 @@ class CarDQNAgent(DQNAgent):
             eps = EPS_END + (EPS_START - EPS_END) \
                 * np.exp(- self.steps_done / EPS_DECAY)
 
-            print(f'Step : {self.steps_done:5.0f} \t' \
-                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-                  , end='\r')
+            # print(f'Step : {self.steps_done:5.0f} \t' \
+            #     + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
+            #     + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
+            #       , end='\r')
 
         return self.losses
 
     def update_memory(self, state, action, next_state, reward) -> None:
         if self.steps_done < 50:
-            return
+            return None
+
         state = self.prepro(state)
         next_state = self.prepro(next_state)
-        self.memory.push(state, action, next_state, reward)
         self.rewards.append(reward[0].item())
-        #print(self.rewards)
-        #print(reward)
+
+        if sum(self.rewards[-1*min(self.reset_patience,self.episode_duration[-1]):]) <= (self.reset_patience-1)*-0.1:
+            reward[0]=-100
+            self.memory.push(state, action, next_state, reward)
+            self.rewards[-1]=-100
+            return True
+
+        self.memory.push(state, action, next_state, reward)
+
+        return None

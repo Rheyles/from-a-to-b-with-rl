@@ -4,7 +4,7 @@ if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
     try:
-        torch.backends.mps.is_available()
+        assert(torch.backends.mps.is_available())
         DEVICE = torch.device("mps")
     except:
         DEVICE = torch.device('cpu')

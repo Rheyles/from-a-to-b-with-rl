@@ -13,7 +13,7 @@ class Plotter():
 
     @classmethod
     def plot_data_gradually(cls, data_name: str, data: list[float,int] | np.ndarray,
-                            show_result: bool=False, cumulative=False, cum_episode:int=0,
+                            show_result: bool=False, cumulative=False, episode_durations:list[int]=[0],
                             rolling: int=0) -> None:
         """
         Plots gradually the data as a function of time. Each data is plotted in
@@ -34,11 +34,14 @@ class Plotter():
         # We get the correct Figure object
         title = 'Result' if show_result else 'Training ...'
         if cumulative:
-            temp_data = np.array([])
-            for i in range((len(data)//cum_episode)+1):
-                cum_data = np.cumsum(data[int(i*cum_episode):int((i+1)*cum_episode)])
-                temp_data = np.concatenate((temp_data,cum_data))
-            data = temp_data
+            if len(episode_durations) < 1:
+                data = np.cumsum(data)
+            else:
+                temp_data = np.array([])
+                for i in range(len(episode_durations)-1):
+                    cum_data = np.cumsum(data[sum(episode_durations[:i+1]):sum(episode_durations[:i+2])])
+                    temp_data = np.concatenate((temp_data,cum_data))
+                data = temp_data
         if rolling:
             dummy = np.convolve(np.ones_like(data), np.ones(rolling)/rolling, mode='valid')
             data = np.convolve(data, np.ones(rolling)/rolling, mode='valid')/dummy

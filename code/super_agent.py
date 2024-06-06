@@ -17,7 +17,7 @@ class SuperAgent():
         self.losses = [0]
         self.rewards = [0]
         self.episode_rewards = [0]
-        self.episode_duration = [0]
+        self.episode_duration = [0,0]
 
         self.memory = ReplayMemory(MEM_SIZE)
 
@@ -43,6 +43,7 @@ class DQNAgent(SuperAgent):
         self.rewards.append(reward[0].item())
         #print(self.rewards)
         #print(reward)
+        return None
 
     def soft_update_agent(self):
         """
