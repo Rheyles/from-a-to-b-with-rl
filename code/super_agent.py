@@ -1,10 +1,10 @@
-import torch
-import torch.nn as nn
-from datetime import datetime
 import json
 import os
 import glob
+import torch
 import numpy as np
+import torch.nn as nn
+from datetime import datetime
 from params import *
 from buffer import ReplayMemory
 
@@ -16,16 +16,13 @@ class SuperAgent():
         self.creation_time = datetime.now()
         self.time = (datetime.now() - self.creation_time).total_seconds()
         self.log_buffer = []
-        self.folder = 'models/' \
-            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
-            + str(self.__class__.__name__) + '/'
 
         self.steps_done = 0
         self.episode = 0
         self.losses = [0]
         self.rewards = [0]
         self.episode_rewards = [0]
-        self.episode_duration = [0,0]
+        self.episode_duration = [0]
         self.last_action = torch.tensor([[0]], dtype=torch.long, device=DEVICE)
 
         self.memory = ReplayMemory(MEM_SIZE)

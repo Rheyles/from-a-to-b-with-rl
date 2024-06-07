@@ -211,6 +211,9 @@ class CarDQNAgent(DQNAgent):
         current_episode_rewards = sum(self.rewards[-self.episode_duration[-1]:])
         episode_is_done = current_episode_rewards < -8
 
+        if action == 0:
+            reward -= 0.2
+
         if self.episode_duration[-1] < 50: # On ne met pas en mémoire le zoom de début d'épisode
             return episode_is_done
 

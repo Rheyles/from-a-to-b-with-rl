@@ -5,13 +5,14 @@ import car_agent as agent
 
 
 # Initialize Environment
-env = Environment(gym.make("CarRacing-v2", continuous=False))
+render_mode = 'rgb_array_list' if RECORD_VIDEO else RENDER_MODE
+env = Environment(gym.make("CarRacing-v2", render_mode=render_mode, continuous=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 print(f'\n~~~~~ CAR RACING USING {DEVICE} ~~~~~')
 
 # Initialize Agent
 agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
-# agt.load_model("./models/0607_1104_CarDQNAgent")
+agt.load_model("./models/0607_1520_CarDQNAgent")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer')
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, multiframe {MULTIFRAME}\n')
 
@@ -23,6 +24,8 @@ try:
             env.run_episode(agt)
         else:
             env.run_episode_memory(agt)
+
+        env.recording(agt)
         agt.end_episode()
 
 except KeyboardInterrupt:
