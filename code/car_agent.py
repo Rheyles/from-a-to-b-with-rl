@@ -43,6 +43,11 @@ class CarDQNAgent(DQNAgent):
         self.max_reward = 0
         self.reset_patience = reset_patience
 
+        self.batch = []
+        self.multiframes = 3
+
+
+
     def end_episode(self) -> None:
         """
         All the actions to proceed when an episode is over
@@ -65,15 +70,16 @@ class CarDQNAgent(DQNAgent):
 
         crop_height = int(state.shape[1] * 0.88)
         state = state[:, :crop_height, :, :]
-
-        r, g, b = state[:, :, :, 0], state[:, :, :, 1], state[:, :, :, 2]
-        gray = g // 64
+        mf = self.multiframes
+        r, g, b = state[:, :, :, 0::mf], state[:, :, :, 1::mf], state[:, :, :, 2::mf]
+        gray = (g // 16) / 16
+        gray = torch.moveaxis(gray, -1, 1)
 
         #plt.imshow(gray.squeeze(0), cmap='gray')
         #plt.show()
         #input('COntinue ?')
-
-        return gray.unsqueeze(0)
+        #print(gray.unsqueeze(0).shape)
+        return gray
 
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -108,6 +114,8 @@ class CarDQNAgent(DQNAgent):
                     result = self.policy_net(state)
                     action = result.max(1).indices.view(1, 1)
             else:
+                # If action is selected at random, give a bit of extra weight
+                # on hitting the gas
                 choice = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
                 action = torch.tensor([[choice]], device = DEVICE, dtype=torch.long)
 
@@ -154,7 +162,7 @@ class CarDQNAgent(DQNAgent):
         non_final_next_states = torch.cat([s for s in batch.next_state
                                                     if s is not None])
         all_next_states = [s if s is not None else -1
-                           for s in batch.next_state ]
+                           for s in batch.next_state]
 
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
@@ -184,8 +192,8 @@ class CarDQNAgent(DQNAgent):
         # print(torch.cat((state_batch.unsqueeze(1), action_batch, future_state_values, best_action_values.unsqueeze(1)), dim=1))
         # print('\n')
 
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
+        # Compute MSE loss
+        criterion = nn.MSELoss()
         loss = criterion(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
 

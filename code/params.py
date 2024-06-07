@@ -9,7 +9,7 @@ else:
     except:
         DEVICE = torch.device('cpu')
 
-RENDER_FPS = 200
+RENDER_FPS = 60
 NUM_EPISODES = 1000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
 
@@ -37,6 +37,10 @@ LR = 1e-1
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
+
+#MULTIFRAME is the amount of frames you feed into the network
+# HAS TO BE SET TO 1 if the method run_episode is called in the main
+MULTIFRAME = 1
 
 # Patience of the scheduler that decrease the learning rate in the car race env
 CAR_SCHEDULER_PATIENCE = 25
