@@ -48,6 +48,27 @@ class LinearA2C(nn.Module):
 
 
 class ConvDQN(nn.Module):
+    def __init__(self, n_actions, dropout_rate=0.0):
+        super(ConvDQN, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(MULTIFRAME, 16, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))
+        self.lin = nn.Linear(11552, n_actions)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = out.view(out.size(0), -1)  # Flatten
+        out = self.lin(out)
+        return out
+
+
+"""class ConvDQN(nn.Module):
 
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN, self).__init__()

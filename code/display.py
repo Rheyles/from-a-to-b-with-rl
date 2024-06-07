@@ -11,8 +11,8 @@ class Plotter():
 
     @classmethod
     def plot_data_gradually(cls, data_name: str, data: list[float,int] | np.ndarray,
-                            show_result: bool=False, cumulative=False, episode_durations:list[int]=[],
-                            rolling: int=0) -> None:
+                            show_result: bool=False, cumulative=False, episode_durations:list[int]=[0],
+                            rolling: int=0, per_episode=False) -> None:
         """
         Plots gradually the data as a function of time. Each data is plotted in
         its own figure
@@ -50,7 +50,8 @@ class Plotter():
             ax = plt.axes()
             ax.set_title(title)
             ax.plot(data)
-            ax.set_xlabel('Step')
+            x_label = 'Episode' if per_episode else 'Step'
+            ax.set_xlabel(x_label)
             ax.set_ylabel(data_name)
         else:
             ax = plt.figure(cls.fig_data_list.index(data_name) + 1).gca()

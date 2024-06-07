@@ -1,8 +1,8 @@
 import gymnasium as gym
 from itertools import count
 import torch
-from params import DEVICE, MULTIFRAME
-
+from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY
+from gymnasium.utils.save_video import save_video # type: ignore
 
 class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
@@ -37,21 +37,16 @@ class Environment():
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
             agent.logging()
 
-            if reset is not None and reset:
-                break
-
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
             agent.optimize_model()
 
-            # Soft update of the target network's weights
-            # θ′ ← τ θ + (1 −τ )θ′
-            agent.soft_update_agent()
+            # Update of the target network's weights
+            agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
-            if done:
-                break
+            if done or reset: break
 
         return t
 
@@ -89,10 +84,9 @@ class Environment():
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
-            if reset is not None :
-                if reset:
-                    break
             agent.logging()
+
+            if reset: break
 
             # Move to the next state
             state = next_state
@@ -102,9 +96,21 @@ class Environment():
 
             # Soft update of the target network's weights
             # θ′ ← τ θ + (1 −τ )θ′
-            agent.soft_update_agent()
+            agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
             if done:
                 break
 
         return t
+
+    def recording(self, agent):
+        is_best_run = agent.episode_rewards[-1] = max(agent.episode_rewards)
+        if is_best_run:
+            save_video(
+                frames = self.env.render(),
+                video_folder=agent.folder,
+                fps=30,
+                name_prefix='recording',
+                step_starting_index=0,
+                episode_index=agent.episode,
+            )

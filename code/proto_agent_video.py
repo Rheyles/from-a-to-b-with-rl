@@ -14,19 +14,20 @@ if filming == 'y':
 else:
     render_mode = "human"
 
-env = gym.make("FrozenLake-v1", render_mode=render_mode, is_slippery=False)
+env = gym.make("CarRacing-v2", continuous=False, render_mode=render_mode)
 observation, info = env.reset()
 
 step_starting_index = 0
 episode_index = 0
 
-for step_index in range(25):
+for step_index in range(500):
     print(f"Action space : {env.action_space}")
     #action = env.action_space.sample()  # agent policy that uses the observation and info
-    action = int(input("Quelle action pour le lutin ?\n0.Left 1.Down 2.Right 3.Up\n"))
+    # action = int(input("Quelle action pour le lutin ?\n0.Left 1.Down 2.Right 3.Up\n"))
+    action = 3
     observation, reward, terminated, truncated, info = env.step(action)
 
-    print(f"observation : {observation}")
+    # print(f"observation : {observation}")
     print(f"reward : {reward}")
     print(f"terminated : {terminated}")
     print(f"truncated : {truncated}")
