@@ -34,7 +34,9 @@ class SuperAgent():
         pass
     def optimize_model(self) -> list:
         pass
-    def save_model(self):
+    def soft_update_agent(self, *args, **kwargs):
+        pass
+    def save_model(self, **kwargs):
         pass
     def load_model(self):
         pass
