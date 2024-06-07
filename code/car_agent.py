@@ -20,29 +20,14 @@ from display import Plotter, dqn_diagnostics
 class CarDQNAgent(DQNAgent):
 
     def __init__(self, y_dim: int, reward_threshold:float=20, reset_patience:int=250, **kwargs) -> None:
-        super().__init__(**kwargs)
         self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.last_action = 0
-        self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
-            (optimizer=self.optimizer,
-             mode='max',
-             factor=0.5,
-             min_lr = 1e-4,
-             patience=CAR_SCHEDULER_PATIENCE)
-
-        self.folder = 'models/' \
-            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
-            + str(self.__class__.__name__) + '/'
-
-        os.makedirs(self.folder, exist_ok=True)
+        super().__init__(**kwargs)
 
         self.reward_threshold = reward_threshold
         self.max_reward = 0
         self.reset_patience = reset_patience
-
         self.batch = []
 
     def end_episode(self) -> None:
@@ -97,10 +82,10 @@ class CarDQNAgent(DQNAgent):
         self.epsilon = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
         self.time = (datetime.now() - self.creation_time).total_seconds()
+        self.steps_done+=1 #Update the number of steps within one episode
+        self.episode_duration[-1]+=1 #Update the duration of the current episode
 
         if self.steps_done % IDLENESS == 0:
-            self.steps_done+=1 #Update the number of steps within one episode
-            self.episode_duration[-1]+=1 #Update the duration of the current episode
             if sample > self.epsilon or not self.exploration:
                 with torch.no_grad():
                     # torch.no_grad() used when inference on the model is done
@@ -113,15 +98,12 @@ class CarDQNAgent(DQNAgent):
             else:
                 # If action is selected at random, give a bit of extra weight
                 # on hitting the gas
-                choice = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
-                action = torch.tensor([[choice]], device = DEVICE, dtype=torch.long)
-
+                action = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
+                action = torch.tensor([[action]], device=DEVICE, dtype=torch.long)
 
             self.last_action = action
             return action
         else:
-            self.steps_done+=1 #Update the number of steps within one episode
-            self.episode_duration[-1]+=1 #Update the duration of the current episode
             return self.last_action
 
     def optimize_model(self) -> list:
@@ -182,7 +164,6 @@ class CarDQNAgent(DQNAgent):
             future_state_values[non_final_mask,:] = self.target_net(non_final_next_states)
 
         future_state_values = (future_state_values * GAMMA) + rewards_tensor
-        best_action = future_state_values.argmax(1)
         best_action_values = future_state_values.max(1).values
 
         # print('\n\n')
@@ -190,16 +171,16 @@ class CarDQNAgent(DQNAgent):
         # print('\n')
 
         # Compute MSE loss
-        criterion = nn.MSELoss()
-        loss = criterion(state_action_values, best_action_values.unsqueeze(1))
+        loss = self.lossfun(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
 
         #Plotting
-
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True, episode_durations=self.episode_duration)
-            Plotter().plot_data_gradually('Reward per Episode', self.episode_rewards)
+            # Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True, episode_durations=self.episode_duration)
+            Plotter().plot_data_gradually('Reward per Episode',
+                                          self.episode_rewards,
+                                          per_episode=True)
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -208,74 +189,33 @@ class CarDQNAgent(DQNAgent):
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        if self.show_diagnostics:
-            dqn_diagnostics(self, action_batch, best_action,
-                            state_batch, reward_batch, all_next_states,
-                            state_action_values,future_state_values,
-                            best_action_values)
-        else:
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+        act = self.last_action.item()
 
-            rwd_ep = self.episode_rewards[-1]
-            lr = self.scheduler.optimizer.param_groups[0]['lr']
-            act = self.last_action.item()
+        print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+            + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+        print(f" 🏎️  🏎️  || " \
+            + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+            + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+            + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+            + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
 
-            print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
-                + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
-            print(f" 🏎️  🏎️  || " \
-                + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
-                + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
-                + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
-                + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
-
-            print("\033[F"*2, end='')
+        print("\033[F"*2, end='')
 
         return self.losses
 
-    def update_memory(self, state, action, next_state, reward) -> None:
+    def update_memory(self, state, action, next_state, reward) -> bool:
+
         self.rewards.append(reward[0].item())
+        current_episode_rewards = sum(self.rewards[-self.episode_duration[-1]:])
+        episode_is_done = current_episode_rewards < -8
 
         if self.episode_duration[-1] < 50: # On ne met pas en mémoire le zoom de début d'épisode
-            return None
+            return episode_is_done
 
         state = self.prepro(state)
         next_state = self.prepro(next_state)
-
-        if sum(self.rewards[-1*min(self.reset_patience,self.episode_duration[-1]):]) <= (self.reset_patience-1)*-0.1:
-            reward[0]=-100
-            self.memory.push(state, action, next_state, reward)
-            self.rewards[-1]=-100
-            return True
-
         self.memory.push(state, action, next_state, reward)
 
-        return None
-
-
-    def logging(self):
-        """Logs some statistics on the agent running as a function of time
-        in a .csv file"""
-
-        if not os.path.exists(self.folder + 'log.csv'):
-            with open(self.folder + 'log.csv', 'w') as log_file:
-                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon,Action\n')
-
-        lr = self.scheduler.optimizer.param_groups[0]['lr']
-
-        self.log_buffer.append([self.time,
-                                     self.steps_done,
-                                     self.episode,
-                                     self.losses[-1],
-                                     self.rewards[-1],
-                                     lr,
-                                     self.epsilon,
-                                     self.last_action.item()])
-
-        if self.steps_done % self.log_every == 0:
-            array_test = np.vstack(self.log_buffer)
-            self.log_buffer = []
-
-            with open(self.folder + 'log.csv', 'a') as myfile:
-                np.savetxt(myfile, array_test, delimiter=',',
-                           fmt=["%7.2f", "%6d", "%4d",
-                                "%5.3e", "%5.3e", "%5.3e",
-                                "%5.3e", "%d"])
+        return episode_is_done

@@ -5,10 +5,11 @@ import numpy as np
 import random
 
 from params import *
+from datetime import datetime
 from super_agent import DQNAgent
 from network import LinearDQN
 from buffer import Transition
-from display import Plotter, dqn_diagnostics, plot_success_rate
+from display import Plotter, dqn_diagnostics
 
 class FrozenDQNAgentBase(DQNAgent):
 
@@ -21,14 +22,11 @@ class FrozenDQNAgentBase(DQNAgent):
             show_diagnostics (bool): Whether you want to show detailed info
             on the DQN network while it works. Defaults to False
         """
-        super().__init__(**kwargs)
         x_dim = 1
         self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
         self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
-
-        self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
-
-
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        super().__init__(**kwargs)
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -43,21 +41,39 @@ class FrozenDQNAgentBase(DQNAgent):
         Returns:
             act ActType : Action that the agent performs
         """
+
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        self.epsilon = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
+        self.episode_duration[-1]+=1 #Update the duration of the current episode
         self.steps_done+=1 #Update the number of steps within one episode
-        if sample > eps_threshold or not self.exploration:
+        self.time = (datetime.now() - self.creation_time).total_seconds()
+
+        if sample > self.epsilon or not self.exploration:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
                 result = self.policy_net(state)
-                return result.max(0).indices.view(1, 1)
+                action = result.max(0).indices.view(1, 1)
         else:
-            return torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
+            action = torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
 
+        self.last_action = action
+        return action
+
+    def end_episode(self) -> None:
+        """
+        All the actions to proceed when an episode is over
+
+        Args:
+            episode_duration (int): length of the episode
+        """
+        self.episode_rewards.append(sum(self.rewards[-1 * self.episode_duration[-1]:]))
+        self.episode_duration.append(0)
+        self.episode += 1
+        self.scheduler.step(metrics=self.episode_rewards[-1])
 
     def optimize_model(self) -> list:
         """
@@ -117,24 +133,20 @@ class FrozenDQNAgentBase(DQNAgent):
             future_state_values[non_final_mask,:] = self.target_net(non_final_next_states.unsqueeze(-1))
 
         future_state_values = (future_state_values * GAMMA) + rewards_tensor
-        best_action = future_state_values.argmax(1)
         best_action_values = future_state_values.max(1).values
 
-        # print('\n\n')
-        # print(torch.cat((state_batch.unsqueeze(1), action_batch, future_state_values, best_action_values.unsqueeze(1)), dim=1))
-        # print('\n')
-
-        # Compute Huber loss
+        # Compute Loss
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
 
-        #Plotting
-
+         #Plotting
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True)
-            Plotter().plot_data_gradually('RewardRate', self.episode_rewards, rolling=30)
+            Plotter().plot_data_gradually('Rewards',
+                                          self.episode_rewards,
+                                          rolling=10,
+                                          per_episode=True)
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -143,24 +155,22 @@ class FrozenDQNAgentBase(DQNAgent):
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        if self.show_diagnostics:
-            dqn_diagnostics(self, action_batch, best_action,
-                            state_batch, reward_batch, all_next_states,
-                            state_action_values,future_state_values,
-                            best_action_values)
-        else:
-            eps = EPS_END + (EPS_START - EPS_END) \
-                * np.exp(- self.steps_done / EPS_DECAY)
+        # Fancy print
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+        act = self.last_action.item()
 
-            print(f'Step : {self.steps_done:5.0f} \t' \
-                + f'episode {self.episode:4.0f} / {NUM_EPISODES:4.0f} \t'\
-                + f'loss = {self.losses[-1]:.3e}, ε = {eps:7.4f}'
-                  , end='\r')
+        print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+            + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+        print(f" 🎄  🎄  || " \
+            + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+            + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+            + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+            + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
+
+        print("\033[F"*2, end='')
 
         return self.losses
-
-
-
 
 class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
@@ -173,12 +183,11 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
             show_diagnostics (bool): Whether you want to show detailed info
             on the DQN network while it works. Defaults to False
         """
-        super().__init__(**kwargs)
         x_dim = 4
-        self.policy_net = LinearDQN(x_dim, y_dim)
-        self.target_net = LinearDQN(x_dim, y_dim)
-
-        self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
+        self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
+        self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        super().__init__(**kwargs)
 
     def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
         """
@@ -242,11 +251,12 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         """
         observation = self.prepare_observation(state, env_map)
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        self.epsilon = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
         self.steps_done+=1 #Update the number of steps within one episode
+        self.episode_duration[-1]+=1 #Update the duration of the current episode
 
-        if sample > eps_threshold or not self.exploration:
+        if sample > self.epsilon or not self.exploration:
             with torch.no_grad():
                 # torch.no_grad() used when inference on the model is done
                 # t.max(1) will return the largest column value of each row.
@@ -330,10 +340,10 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         #Plotting
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
-            # print(type(self.losses))
-            plot_success_rate(self.episode_rewards)
-
-
+            Plotter().plot_data_gradually('Rewards',
+                                          self.episode_rewards,
+                                          rolling=30,
+                                          per_episode=True)
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -352,10 +362,6 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
             next_observation = self.prepare_observation(next_state, env_map)
         self.memory.push(observation, action, next_observation, reward)
         self.rewards.append( self.rewards[-1] + reward[0].item() )
-
-        #Plotting
-        if self.steps_done % DISPLAY_EVERY == 0:
-            Plotter().plot_data_gradually('Rewards', self.rewards)
 
         #print(self.rewards)
         #print(reward)

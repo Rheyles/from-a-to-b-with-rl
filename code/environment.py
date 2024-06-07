@@ -1,7 +1,7 @@
 import gymnasium as gym
 from itertools import count
 import torch
-from params import DEVICE, MULTIFRAME
+from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY
 
 
 class Environment():
@@ -37,21 +37,16 @@ class Environment():
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
             agent.logging()
 
-            if reset is not None and reset:
-                break
-
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
             agent.optimize_model()
 
-            # Soft update of the target network's weights
-            # θ′ ← τ θ + (1 −τ )θ′
-            agent.soft_update_agent()
+            # Update of the target network's weights
+            agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
-            if done:
-                break
+            if done or reset: break
 
         return t
 
@@ -89,10 +84,9 @@ class Environment():
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
-            if reset is not None :
-                if reset:
-                    break
             agent.logging()
+
+            if reset: break
 
             # Move to the next state
             state = next_state
@@ -102,7 +96,7 @@ class Environment():
 
             # Soft update of the target network's weights
             # θ′ ← τ θ + (1 −τ )θ′
-            agent.soft_update_agent()
+            agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
             if done:
                 break

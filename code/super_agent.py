@@ -1,9 +1,10 @@
 import torch
+import torch.nn as nn
 from datetime import datetime
 import json
 import os
 import glob
-
+import numpy as np
 from params import *
 from buffer import ReplayMemory
 
@@ -14,12 +15,10 @@ class SuperAgent():
         self.show_diagnostics = kwargs.get('show_diagnostics',False)
         self.creation_time = datetime.now()
         self.time = (datetime.now() - self.creation_time).total_seconds()
-        self.log_every = kwargs.get('log_every', 100)
         self.log_buffer = []
         self.folder = 'models/' \
             + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
             + str(self.__class__.__name__) + '/'
-
 
         self.steps_done = 0
         self.episode = 0
@@ -27,6 +26,7 @@ class SuperAgent():
         self.rewards = [0]
         self.episode_rewards = [0]
         self.episode_duration = [0,0]
+        self.last_action = torch.tensor([[0]], dtype=torch.long, device=DEVICE)
 
         self.memory = ReplayMemory(MEM_SIZE)
 
@@ -44,9 +44,32 @@ class DQNAgent(SuperAgent):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.policy_net = None
-        self.target_net = None
         self.epsilon = EPS_START
+
+        if OPTIMIZER == 'RMSPROP':
+            self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=INI_LR)
+        elif OPTIMIZER == 'ADAMW':
+            self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=INI_LR)
+        else:
+            self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=INI_LR)
+
+        if LOSS == 'MSE':
+            self.lossfun = nn.MSELoss()
+        else:
+            self.lossfun = nn.SmoothL1Loss()
+
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max',
+             factor=SCHEDULER_FACTOR,
+             min_lr = MIN_LR,
+             patience=SCHEDULER_PATIENCE)
+
+        self.folder = 'models/' \
+            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
+            + str(self.__class__.__name__) + '/'
+
+        os.makedirs(self.folder, exist_ok=True)
 
     def update_memory(self, state, action, next_state, reward) -> None:
         self.memory.push(state, action, next_state, reward)
@@ -55,18 +78,26 @@ class DQNAgent(SuperAgent):
         #print(reward)
         return None
 
-    def soft_update_agent(self):
+    def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
         """
         Performs a soft update of the agent's networks: i.e. updates the weights of the target net according to the changes
         observed in the policy net. In initial code, updated at every episode
         """
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
+
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-        self.target_net.load_state_dict(target_net_state_dict)
+
+        if strategy == 'soft':
+            # Soft update of the target network's weights
+            # θ′ ← τ θ + (1 −τ )θ′
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+            self.target_net.load_state_dict(target_net_state_dict)
+
+        elif self.steps_done % int(1/TAU) == 0:
+            # Hard refresh every 1/TAU
+            print("\n\n\nHARD REFRESH")
+            self.target_net.load_state_dict(target_net_state_dict)
 
     def save_model(self, add_episode=True) -> None:
         """
@@ -78,7 +109,7 @@ class DQNAgent(SuperAgent):
 
         episode_str = ''
         if add_episode:
-            episode_str = f'_{self.episode}'
+            episode_str = f'_{self.episode:05d}'
 
         os.makedirs(self.folder, exist_ok=True)
         torch.save(self.policy_net.state_dict(),
@@ -104,11 +135,42 @@ class DQNAgent(SuperAgent):
             folder (str): Folder to the model
         """
 
-        policy_file = glob.glob(folder + '/policy_*.model')[-1]
-        target_file = glob.glob(folder + '/target_*.model')[-1]
+        policy_file = glob.glob(folder + '/policy_*.model')[0]
+        target_file = glob.glob(folder + '/target_*.model')[0]
         self.policy_net.load_state_dict(torch.load(policy_file, map_location=DEVICE))
         self.target_net.load_state_dict(torch.load(target_file, map_location=DEVICE))
-        with open(folder + '/params.json') as my_file:
-            print(f'Loaded model {policy_file} from {folder}')
-            hyper_dict = json.load(my_file)
-            print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))
+        print(f'Loaded model weights : {policy_file} from {folder}')
+
+        # with open(folder + '/params.json') as my_file:
+        #     hyper_dict = json.load(my_file)
+        #     print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))
+
+
+    def logging(self):
+        """Logs some statistics on the agent running as a function of time
+        in a .csv file"""
+
+        if not os.path.exists(self.folder + 'log.csv'):
+            with open(self.folder + 'log.csv', 'w') as log_file:
+                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon,Action\n')
+
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        self.log_buffer.append([self.time,
+                                     self.steps_done,
+                                     self.episode,
+                                     self.losses[-1],
+                                     self.rewards[-1],
+                                     lr,
+                                     self.epsilon,
+                                     self.last_action.item()])
+
+        if self.steps_done % LOG_EVERY == 0:
+            array_test = np.vstack(self.log_buffer)
+            self.log_buffer = []
+
+            with open(self.folder + 'log.csv', 'a') as myfile:
+                np.savetxt(myfile, array_test, delimiter=',',
+                           fmt=["%7.2f", "%6d", "%4d",
+                                "%5.3e", "%5.3e", "%5.3e",
+                                "%5.3e", "%d"])
