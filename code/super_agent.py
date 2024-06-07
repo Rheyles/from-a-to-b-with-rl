@@ -30,14 +30,16 @@ class SuperAgent():
 
         self.memory = ReplayMemory(MEM_SIZE)
 
-    def select_action()-> torch.Tensor:
+    def select_action(self)-> torch.Tensor:
         pass
-    def optimize_model() -> list:
+    def optimize_model(self) -> list:
         pass
-    def save_model():
+    def save_model(self):
         pass
-    # def load_model():
-    #     pass
+    def load_model(self):
+        pass
+    def logging(self):
+        pass
 
 
 class DQNAgent(SuperAgent):
