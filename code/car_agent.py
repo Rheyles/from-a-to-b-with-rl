@@ -7,6 +7,8 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from datetime import datetime
+from gymnasium.spaces.utils import flatdim
+
 
 from params import *
 from super_agent import DQNAgent
@@ -24,7 +26,12 @@ class CarDQNAgent(DQNAgent):
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.last_action = 0
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=LR)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=self.optimizer, mode='max', factor=0.1, patience=CAR_SCHEDULER_PATIENCE)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max',
+             factor=0.5,
+             min_lr = 1e-4,
+             patience=CAR_SCHEDULER_PATIENCE)
 
         self.folder = 'models/' \
             + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
@@ -36,8 +43,6 @@ class CarDQNAgent(DQNAgent):
         self.max_reward = 0
         self.reset_patience = reset_patience
 
-
-
     def end_episode(self) -> None:
         """
         All the actions to proceed when an episode is over
@@ -48,7 +53,7 @@ class CarDQNAgent(DQNAgent):
         self.episode_rewards.append(sum(self.rewards[-1 * self.episode_duration[-1]:]))
         self.episode_duration.append(0)
         self.episode += 1
-        self.scheduler.step(self.episode_rewards[-1])
+        self.scheduler.step(metrics=self.episode_rewards[-1])
         if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
             self.max_reward = self.episode_rewards[-1]
             self.save_model()
@@ -103,7 +108,9 @@ class CarDQNAgent(DQNAgent):
                     result = self.policy_net(state)
                     action = result.max(1).indices.view(1, 1)
             else:
-                action = torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
+                choice = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
+                action = torch.tensor([[choice]], device = DEVICE, dtype=torch.long)
+
 
             self.last_action = action
             return action
@@ -205,12 +212,17 @@ class CarDQNAgent(DQNAgent):
 
             rwd_ep = self.episode_rewards[-1]
             lr = self.scheduler.optimizer.param_groups[0]['lr']
+            act = self.last_action.item()
 
-            print(f'  🏎️  🏎️   || t {self.time:7.1f} |' \
-                + f' Step {self.steps_done:7.0f} |' \
-                + f' Ep. {self.episode:3.0f} / {NUM_EPISODES:4.0f} |' \
-                + f' Loss {self.losses[-1]:.2e} | ε {self.epsilon:6.4f} |'\
-                + f' η {lr:.2e} | Rwd/ep {rwd_ep:7.2f}', end='\r')
+            print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+                + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+            print(f" 🏎️  🏎️  || " \
+                + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+                + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+                + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+                + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
+
+            print("\033[F"*2, end='')
 
         return self.losses
 
@@ -240,7 +252,7 @@ class CarDQNAgent(DQNAgent):
 
         if not os.path.exists(self.folder + 'log.csv'):
             with open(self.folder + 'log.csv', 'w') as log_file:
-                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon\n')
+                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon,Action\n')
 
         lr = self.scheduler.optimizer.param_groups[0]['lr']
 
@@ -250,7 +262,8 @@ class CarDQNAgent(DQNAgent):
                                      self.losses[-1],
                                      self.rewards[-1],
                                      lr,
-                                     self.epsilon])
+                                     self.epsilon,
+                                     self.last_action.item()])
 
         if self.steps_done % self.log_every == 0:
             array_test = np.vstack(self.log_buffer)
@@ -260,4 +273,4 @@ class CarDQNAgent(DQNAgent):
                 np.savetxt(myfile, array_test, delimiter=',',
                            fmt=["%7.2f", "%6d", "%4d",
                                 "%5.3e", "%5.3e", "%5.3e",
-                                "%5.3e"])
+                                "%5.3e", "%d"])
