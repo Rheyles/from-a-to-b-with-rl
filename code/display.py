@@ -11,7 +11,7 @@ class Plotter():
 
     @classmethod
     def plot_data_gradually(cls, data_name: str, data: list[float,int] | np.ndarray,
-                            show_result: bool=False, cumulative=False, episode_durations:list[int]=[0],
+                            show_result: bool=False, cumulative=False, episode_durations:list[int]=[],
                             rolling: int=0) -> None:
         """
         Plots gradually the data as a function of time. Each data is plotted in

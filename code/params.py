@@ -10,7 +10,7 @@ else:
         DEVICE = torch.device('cpu')
 
 RENDER_FPS = 60
-NUM_EPISODES = 1000
+NUM_EPISODES = 10000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
 
 # MEM_SIZE is the size of the ReplayMemory buffer
@@ -27,13 +27,13 @@ GAMMA = 0.7
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 EPS_START = 1.0
 EPS_END = 0.05
-EPS_DECAY = 100000
+EPS_DECAY = 1000
 
 # TAU is the update rate of the target network
 TAU = 0.02
 
 # LR is the learning rate of the ``AdamW`` optimizer
-LR = 1e-1
+LR = 1e-3
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3

@@ -4,7 +4,7 @@ from params import NUM_EPISODES, RENDER_FPS
 import frozen_agent as agent
 
 # Initialize Environment
-env = Environment(gym.make("FrozenLake-v1",render_mode='human', is_slippery=False))
+env = Environment(gym.make("FrozenLake-v1", map_name='8x8',render_mode='human', is_slippery=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 
 # Initialize Agent
