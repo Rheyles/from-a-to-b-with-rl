@@ -35,10 +35,10 @@ class Environment():
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
-            if reset is not None :
-                if reset:
-                    break
             agent.logging()
+
+            if reset is not None and reset:
+                break
 
             # Move to the next state
             state = next_state

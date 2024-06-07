@@ -44,9 +44,6 @@ class CarDQNAgent(DQNAgent):
         self.reset_patience = reset_patience
 
         self.batch = []
-        self.multiframes = 3
-
-
 
     def end_episode(self) -> None:
         """
@@ -69,9 +66,9 @@ class CarDQNAgent(DQNAgent):
             return None
 
         crop_height = int(state.shape[1] * 0.88)
-        state = state[:, :crop_height, :, :]
-        mf = self.multiframes
-        r, g, b = state[:, :, :, 0::mf], state[:, :, :, 1::mf], state[:, :, :, 2::mf]
+        crop_w = int(state.shape[2] * 0.07)
+        state = state[:, :crop_height, crop_w:-crop_w, :]
+        g = state[:, :, :, 1::3]
         gray = (g // 16) / 16
         gray = torch.moveaxis(gray, -1, 1)
 
