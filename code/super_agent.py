@@ -122,11 +122,10 @@ class DQNAgent(SuperAgent):
         with open(self.folder + '/params.json', 'w') as my_file:
             import params as prm
             my_dict = prm.__dict__
+            my_dict['DEVICE'] = DEVICE.__str__()
             my_dict = {key : val for key, val in my_dict.items()
                        if '__' not in key
-                       and key != 'torch'
-                       and key != 'DEVICE'}
-
+                       and key != 'torch'}
             json.dump(my_dict, my_file)
 
 
