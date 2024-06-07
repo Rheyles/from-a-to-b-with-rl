@@ -2,7 +2,7 @@ import gymnasium as gym
 from itertools import count
 import torch
 from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY
-
+from gymnasium.utils.save_video import save_video # type: ignore
 
 class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
@@ -102,3 +102,15 @@ class Environment():
                 break
 
         return t
+
+    def recording(self, agent):
+        is_best_run = agent.episode_rewards[-1] = max(agent.episode_rewards)
+        if is_best_run:
+            save_video(
+                frames = self.env.render(),
+                video_folder=agent.folder,
+                fps=30,
+                name_prefix='recording',
+                step_starting_index=0,
+                episode_index=agent.episode,
+            )

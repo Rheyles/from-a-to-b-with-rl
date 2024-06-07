@@ -9,39 +9,41 @@ else:
     except:
         DEVICE = torch.device('cpu')
 
+RENDER_MODE = 'human' # or 'rgb_array' or 'state_pixels'
 RENDER_FPS = 150
 NUM_EPISODES = 1000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
-LOG_EVERY = 300 # Log info every XXX steps
+LOG_EVERY = 500 # Log info every XXX steps
+RECORD_VIDEO = True
 
 # MEM_SIZE is the size of the ReplayMemory buffer
-MEM_SIZE = 10000
+MEM_SIZE = 100000
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
 BATCH_SIZE = 64
 
 # GAMMA is the discount factor of long-term reward
-GAMMA = 0.7
+GAMMA = 0.99
 
 # EPS_START is the starting value of epsilon
 # EPS_END is the final value of epsilon
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 EPS_START = 1.0
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 100000
 
 # TAU is the update rate of the target network
 # NETWORK REFRESH STRATEGY ('hard', 'soft') tells you if you either
 # progressively replace your target net (mixing itself with tau * policy_net)
 # or if you do it completely every 1/TAU steps
 NETWORK_REFRESH_STRATEGY = 'soft'
-TAU = 0.01
+TAU = 0.003
 
 # LR is the learning rate of the optimizer
-LOSS = 'HUBER'   # HUBER, MSE, MAE
-OPTIMIZER = 'ADAMW' # ADAM, RMSPROP, ADAMW
-INI_LR = 1e-3
-MIN_LR = 1e-3
+LOSS = 'MSE'   # HUBER, MSE, MAE
+OPTIMIZER = 'RMSPROP' # ADAM, RMSPROP, ADAMW
+INI_LR = 1e-1
+MIN_LR = 1e-5
 
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
@@ -51,5 +53,5 @@ IDLENESS = 3
 MULTIFRAME = 3
 
 # Patience of the scheduler that decrease the learning rate in the car race env
-SCHEDULER_FACTOR = 0.5
+SCHEDULER_FACTOR = 0.7
 SCHEDULER_PATIENCE = 10
