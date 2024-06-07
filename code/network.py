@@ -68,7 +68,7 @@ class ConvDQN(nn.Module):
         return out
 
 
-"""class ConvDQN(nn.Module):
+class ConvDQN(nn.Module):
 
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN, self).__init__()
@@ -139,9 +139,6 @@ class ConvA2C(nn.Module):
             nn.Linear(in_features = 300, out_features = 1),
             nn.Tanh()
         )
-
-
-
 
     def forward(self, state, action = None):
 

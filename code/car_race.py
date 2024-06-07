@@ -12,7 +12,7 @@ print(f'\n~~~~~ CAR RACING USING {DEVICE} ~~~~~')
 
 # Initialize Agent
 agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=0.1)
-agt.load_model("./models/0607_1520_CarDQNAgent")
+#agt.load_model("./models/0607_1520_CarDQNAgent")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer')
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, multiframe {MULTIFRAME}\n')
 
