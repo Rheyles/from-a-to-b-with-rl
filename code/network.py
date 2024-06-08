@@ -47,9 +47,9 @@ class LinearA2C(nn.Module):
         return y_val, y_pol
 
 
-class ConvDQN(nn.Module):
+class SmallConvDQN(nn.Module):
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvDQN, self).__init__()
+        super(SmallConvDQN, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 16, kernel_size=3, stride=1),
             nn.ReLU(),
@@ -96,7 +96,7 @@ class ConvDQN(nn.Module):
         out = self.conv2(out)
         out = self.conv3(out)
         out = self.lin1(out)
-        return F.softmax(out)
+        return out
 
 
 
