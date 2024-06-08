@@ -677,8 +677,14 @@ class FrozenA2CAgentBase(SuperAgent):
         pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
 
         loss = (val_loss+pol_loss).mean()
-        print(loss.item())
         self.losses.append(float(loss))
+
+        #Plotting
+        if self.steps_done % DISPLAY_EVERY == 0:
+            Plotter().plot_data_gradually('Loss', self.losses)
+            Plotter().plot_data_gradually('Rewards',
+                                          self.episode_rewards,
+                                          per_episode=True)
 
         self.optimizer.zero_grad()
         loss.backward()
