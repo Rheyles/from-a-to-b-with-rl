@@ -358,6 +358,10 @@ class CarA2CAgent(SuperAgent):
 
         adv = y_val_true - y_val_pred
         val_loss = 0.5 * torch.square(adv)
+
+        print(adv.shape)
+        print(torch.log(y_pol_pred+1e-6).shape)
+
         pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
 
         loss = (val_loss+pol_loss).mean()
@@ -388,3 +392,11 @@ class CarA2CAgent(SuperAgent):
         self.memory.push(state, action, next_state, reward)
 
         return None
+
+    def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
+            """Empty function that just allows the environment code to run
+
+            Args:
+                strategy (_type_, optional): _description_. Defaults to NETWORK_REFRESH_STRATEGY.
+            """
+            pass
