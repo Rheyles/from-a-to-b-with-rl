@@ -359,9 +359,6 @@ class CarA2CAgent(SuperAgent):
         adv = y_val_true - y_val_pred
         val_loss = 0.5 * torch.square(adv)
 
-        print(adv.shape)
-        print(torch.log(y_pol_pred+1e-6).shape)
-
         pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
 
         loss = (val_loss+pol_loss).mean()
