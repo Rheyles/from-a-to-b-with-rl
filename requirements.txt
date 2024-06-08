@@ -8,3 +8,4 @@ swig
 wheel setuptools
 box2d pygame
 box2d box2d-kengz
+pandas
