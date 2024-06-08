@@ -26,15 +26,15 @@ class LinearA2C(nn.Module):
 
         super().__init__(*args, **kwargs)
         self.actor = nn.Sequential(
-            nn.Linear(n_observations, 300), nn.ReLU(inplace = True),
-            nn.Linear(300, n_actions),
+            nn.Linear(n_observations, 32), nn.ReLU(inplace = True),
+            nn.Linear(32, n_actions),
             nn.Softmax(),
         )
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 9249, out_features = 300),
+            nn.Linear(n_observations+1, out_features = 64), #Added the +1 to account for the action
             nn.ReLU(inplace = True),
-            nn.Linear(in_features = 300, out_features = 1),
+            nn.Linear(in_features = 64, out_features = 1),
             nn.Tanh()
         )
 
