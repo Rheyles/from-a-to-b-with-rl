@@ -257,6 +257,21 @@ class CarA2CAgent(SuperAgent):
         # input('Continue ?')
         return gray
 
+    def end_episode(self) -> None:
+            """
+            All the actions to proceed when an episode is over
+
+            Args:
+                episode_duration (int): length of the episode
+            """
+            self.episode_rewards.append(sum(self.rewards[-1 * self.episode_duration[-1]:]))
+            self.episode_duration.append(0)
+            self.episode += 1
+            self.scheduler.step(metrics=self.episode_rewards[-1])
+            if self.episode_rewards[-1]>=self.reward_threshold + self.max_reward:
+                self.max_reward = self.episode_rewards[-1]
+                self.save_model()
+
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
