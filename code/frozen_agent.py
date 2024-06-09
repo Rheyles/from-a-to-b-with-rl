@@ -104,10 +104,10 @@ class FrozenDQNAgentBase(DQNAgent):
          reward_batch, 
          not_done_batch) = self.memory.sample(BATCH_SIZE)
 
-         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch.unsqueeze(-1)).gather(1, action_batch)
+        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
         # Expected values of actions for non_final_next_states are computed based
@@ -118,31 +118,36 @@ class FrozenDQNAgentBase(DQNAgent):
 
         with torch.no_grad():
             future_state_values = rewards_tensor + not_done_batch \
-                * self.target_net(next_state_batch.unsqueeze(-1)) * GAMMA
-            best_action_values = future_state_values.max(1).values
+                * self.target_net(next_state_batch) * GAMMA
+
+            best_action = future_state_values.argmax(1)
+            best_action_values = future_state_values.max(1).values.unsqueeze(-1)
 
         # Compute MSE loss
-        loss = self.lossfun(state_action_values, best_action_values.unsqueeze(1))
+
+        loss = self.lossfun(state_action_values, best_action_values)
         self.losses.append(float(loss))
 
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
         # # In-place gradient clipping
-        # torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
         rwd_ep = self.episode_rewards[-1]
         lr = self.scheduler.optimizer.param_groups[0]['lr']
         act = self.last_action.item()
 
-        # # Plotting
-        # if self.steps_done % DISPLAY_EVERY == 0:
-        #     Plotter().plot_data_gradually('Loss', self.losses)
-        #     Plotter().plot_data_gradually('Rewards',
-        #                                   self.episode_rewards,
-        #                                   rolling=10,
-        #                                   per_episode=True)
+        # dqn_diagnostics(self, 
+        #                 action_batch, 
+        #                 best_action,
+        #                 state_batch,
+        #                 reward_batch,
+        #                 next_state_batch,
+        #                 state_action_values,
+        #                 future_state_values,
+        #                 best_action_values)
 
         # Fancy print
         print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':15s} | {'Loss':8s} |" \
@@ -152,7 +157,6 @@ class FrozenDQNAgentBase(DQNAgent):
             + f'{self.episode:7.0f} / {NUM_EPISODES:5.0f} | ' \
             + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
             + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
-
         print("\033[F"*2, end='')
 
         return self.losses

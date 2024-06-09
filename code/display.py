@@ -93,16 +93,16 @@ def dqn_diagnostics(agent,
         action_arrows = [action_dict[elem.item()] for elem in action_batch]
         best_act_arrs = [action_dict[elem.item()] for elem in best_action]
 
-        states_str     = 'Current state ' + ' | '.join([f"{elem:5.0f}" for elem in state_batch])
+        states_str     = 'Current state ' + ' | '.join([f"{elem:5.0f}" for elem in state_batch.squeeze()])
         action_str     = 'Current action' + ' | '.join([f"    {elem}"   for elem in action_arrows])
-        reward_str     = 'Reward (s,a)  ' + ' | '.join([f"{elem:5.0f}" for elem in reward_batch])
-        next_state_str = 'Future state  ' + ' | '.join([f"{elem:5.0f}"  for elem in all_next_states])
+        reward_str     = 'Reward (s,a)  ' + ' | '.join([f"{elem:5.0f}" for elem in reward_batch.squeeze()])
+        next_state_str = 'Future state  ' + ' | '.join([f"{elem:5.0f}"  for elem in all_next_states.squeeze()])
         current_Q_str  = 'Current Q     ' + ' | '.join([f"{elem:+4.2f}" for elem in torch.squeeze(state_action_values)])
         Q_left_str     = 'Estimated Q ← ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,0]])
         Q_down_str     = 'Estimated Q ↓ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,1]])
         Q_right_str    = 'Estimated Q → ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,2]])
         Q_up_str       = 'Estimated Q ↑ ' + ' | '.join([f"{elem:+4.2f}" for elem in future_state_values[:,3]])
-        expected_Q_str = 'Best known Q  ' + ' | '.join([f"{elem:+4.2f}" for elem in best_action_values])
+        expected_Q_str = 'Best known Q  ' + ' | '.join([f"{elem:+4.2f}" for elem in best_action_values.squeeze()])
         best_act_str   = 'Bst futr actn ' + ' | '.join([f"    {elem}"   for elem in best_act_arrs])
 
         loss = agent.losses[-1]
@@ -125,6 +125,12 @@ def dqn_diagnostics(agent,
         print(expected_Q_str)
         print(best_act_str)
         print('-'*len(states_str))
+
+        # import time
+        # time.sleep(0.1)
+
+        if 14 in state_batch:
+            input()
 
 
 

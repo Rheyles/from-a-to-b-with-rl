@@ -9,9 +9,7 @@ class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
         self.env = env_gym
         self.type = env_gym.unwrapped.spec.id
-        print(self.type)
         self.skip_steps = 50 if 'CarRacing' in self.type else 0 
-        print(self.skip_steps)
 
     def run_episode(self, agent:DQNAgent) -> int:
         """
