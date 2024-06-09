@@ -9,19 +9,25 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from gymnasium.spaces.utils import flatdim
 
-
 from params import *
-from super_agent import DQNAgent, SuperAgent
-from network import ConvDQN, ConvA2C
+from super_agent import DQNAgent
+from network import *
 from buffer import Transition
-from display import Plotter, dqn_diagnostics
+from display import Plotter
 
+networks = {'ConvDQN_3layers_small':ConvDQN_3layers_small, 
+            'ConvDQN_3layers_classic':ConvDQN_3layers_classic,
+            'ConvDQN_2layers_small':ConvDQN_2layers_small,
+            'ConvDQN_2layers_classic':ConvDQN_2layers_classic,
+            'ConvA2C':ConvA2C
+              }
 
 class CarDQNAgent(DQNAgent):
 
     def __init__(self, y_dim: int, reward_threshold:float=20, reset_patience:int=250, **kwargs) -> None:
-        self.policy_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
-        self.target_net = ConvDQN(y_dim, dropout_rate=kwargs.get('dropout_rate',0.0)).to(DEVICE)
+        ChosenNetwork = networks[NETWORK]
+        self.policy_net = ChosenNetwork(y_dim, dropout_rate=DROPOUT_RATE).to(DEVICE)
+        self.target_net = ChosenNetwork(y_dim, dropout_rate=DROPOUT_RATE).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         super().__init__(**kwargs)
 
@@ -45,23 +51,18 @@ class CarDQNAgent(DQNAgent):
             self.max_reward = self.episode_rewards[-1]
             self.save_model()
 
-    def prepro(self, state: torch.Tensor) -> torch.Tensor:
+    def prepro(self, state: torch.Tensor, crop=True) -> torch.Tensor:
 
         if state is None:
             return None
 
-        crop_height = int(state.shape[1] * 0.88)
-        crop_w = int(state.shape[2] * 0.07)
+        state = state[:,:,:,1::3] / 256
+        if crop:
+            crop_height = int(state.shape[1] * 0.88)
+            crop_w = int(state.shape[2] * 0.07)
         state = state[:, :crop_height, crop_w:-crop_w, :]
-        g = state[:, :, :, 1::3]
-        gray = (g // 16) / 16
-        gray = torch.moveaxis(gray, -1, 1)
 
-        # print(gray.shape)
-        # plt.imshow(gray[:,1,:,:], cmap='gray')
-        # plt.show()
-        # input('Continue ?')
-        return gray
+        return state.moveaxis(-1, 1)
 
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -98,7 +99,7 @@ class CarDQNAgent(DQNAgent):
             else:
                 # If action is selected at random, give a bit of extra weight
                 # on hitting the gas
-                action = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
+                action = np.random.choice(flatdim(act_space), p=[0.10, 0.2, 0.2, 0.30, 0.2])
                 action = torch.tensor([[action]], device=DEVICE, dtype=torch.long)
 
             self.last_action = action
@@ -125,27 +126,11 @@ class CarDQNAgent(DQNAgent):
 
         if len(self.memory) < BATCH_SIZE: return 0
 
-        transitions = self.memory.sample(BATCH_SIZE)
-
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
-
-        batch = Transition(*zip(*transitions)) # Needs to pass this from buffer class
-
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
-
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=DEVICE, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
-        all_next_states = [s if s is not None else -1
-                           for s in batch.next_state]
-
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+        (state_batch, 
+         action_batch, 
+         next_state_batch, 
+         reward_batch, 
+         not_done_batch) = self.memory.sample(BATCH_SIZE)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -157,36 +142,22 @@ class CarDQNAgent(DQNAgent):
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
+        rewards_tensor = torch.tile(reward_batch, (1,5)).to(DEVICE)
 
         with torch.no_grad():
-            future_state_values[non_final_mask,:] = self.target_net(non_final_next_states)
-
-        future_state_values = (future_state_values * GAMMA) + rewards_tensor
-        best_action_values = future_state_values.max(1).values
-
-        # print('\n\n')
-        # print(torch.cat((state_batch.unsqueeze(1), action_batch, future_state_values, best_action_values.unsqueeze(1)), dim=1))
-        # print('\n')
+            future_state_values = rewards_tensor + not_done_batch * \
+                self.target_net(next_state_batch) * GAMMA
+            best_action_values = future_state_values.max(1).values
 
         # Compute MSE loss
         loss = self.lossfun(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
 
-        #Plotting
-        if self.steps_done % DISPLAY_EVERY == 0:
-            Plotter().plot_data_gradually('Loss', self.losses)
-            # Plotter().plot_data_gradually('Rewards', self.rewards, cumulative=True, episode_durations=self.episode_duration)
-            Plotter().plot_data_gradually('Reward per Episode',
-                                          self.episode_rewards,
-                                          per_episode=True)
-
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        # # In-place gradient clipping
+        # torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
         rwd_ep = self.episode_rewards[-1]
@@ -204,21 +175,3 @@ class CarDQNAgent(DQNAgent):
         print("\033[F"*2, end='')
 
         return self.losses
-
-    def update_memory(self, state, action, next_state, reward) -> bool:
-
-        self.rewards.append(reward[0].item())
-        current_episode_rewards = sum(self.rewards[-self.episode_duration[-1]:])
-        episode_is_done = current_episode_rewards < -8
-
-        if action == 0:
-            reward -= 0.2
-
-        if self.episode_duration[-1] < 50: # On ne met pas en mémoire le zoom de début d'épisode
-            return episode_is_done
-
-        state = self.prepro(state)
-        next_state = self.prepro(next_state)
-        self.memory.push(state, action, next_state, reward)
-
-        return episode_is_done

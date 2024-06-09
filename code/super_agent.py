@@ -6,7 +6,7 @@ import numpy as np
 import torch.nn as nn
 from datetime import datetime
 from params import *
-from buffer import ReplayMemory
+from buffer import ReplayMemory, TorchMemory
 
 class SuperAgent():
     def __init__(self, **kwargs) -> None:
@@ -25,7 +25,6 @@ class SuperAgent():
         self.episode_duration = [0]
         self.last_action = torch.tensor([[0]], dtype=torch.long, device=DEVICE)
 
-        self.memory = ReplayMemory(MEM_SIZE)
 
     def select_action(self)-> torch.Tensor:
         pass
@@ -41,24 +40,43 @@ class SuperAgent():
         pass
 
 
+
+
 class DQNAgent(SuperAgent):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+
+        
         self.epsilon = EPS_START
 
-        if OPTIMIZER == 'RMSPROP':
-            self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(), lr=INI_LR)
-        elif OPTIMIZER == 'ADAMW':
-            self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=INI_LR)
+        # Choosing my optimizer
+        if OPTIMIZER.lower() == 'rmsprop':
+            self.optimizer = torch.optim.RMSprop(self.policy_net.parameters(),
+                                                 lr=INI_LR,
+                                                 weight_decay=REGULARIZATION)
+        elif OPTIMIZER.lower() == 'adamw':
+            self.optimizer = torch.optim.AdamW(self.policy_net.parameters(),
+                                                 lr=INI_LR,
+                                                 weight_decay=REGULARIZATION)
         else:
-            self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=INI_LR)
+            self.optimizer = torch.optim.Adam(self.policy_net.parameters(),
+                                                 lr=INI_LR,
+                                                 weight_decay=REGULARIZATION)
 
-        if LOSS == 'MSE':
+        # Choosing loss function 
+        if LOSS.lower() == 'mse':
             self.lossfun = nn.MSELoss()
         else:
             self.lossfun = nn.SmoothL1Loss()
 
+        # Memory type 
+        if MEM_TYPE.lower() == 'legacy':
+            self.memory = ReplayMemory(MEM_SIZE)
+        elif MEM_TYPE.lower() == 'torch':
+            self.memory = TorchMemory(MEM_SIZE)
+
+        # Learning rate scheduler
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
             (optimizer=self.optimizer,
              mode='max',
@@ -72,12 +90,40 @@ class DQNAgent(SuperAgent):
 
         os.makedirs(self.folder, exist_ok=True)
 
-    def update_memory(self, state, action, next_state, reward) -> None:
-        self.memory.push(state, action, next_state, reward)
+    def prepro(self, state: torch.Tensor) -> torch.Tensor:
+        """ By default, let's do zero preprocessing.
+        Children classes will overwrite it"""
+
+        if self.steps_done == 0:
+            print("NOTE : DQN agent default preprocessing >> Not doing anything")
+        return state
+
+    def update_memory(self, state:torch.Tensor, 
+                      action:torch.Tensor, 
+                      next_state:torch.Tensor, 
+                      reward:torch.Tensor, 
+                      not_done:torch.Tensor,
+                      skip_steps=50) -> None:
+        """ UPDATE_MEMORY (SUPER_AGENT) defines
+        what to do in general when we update the
+        agent memory. """
+        
+        state = self.prepro(state)
+        next_state = self.prepro(next_state)
+        reward = reward.unsqueeze(-1)
+        not_done = not_done.unsqueeze(-1)
+
         self.rewards.append(reward[0].item())
-        #print(self.rewards)
-        #print(reward)
-        return None
+        current_episode_rewards = sum(self.rewards[-self.episode_duration[-1]:])
+        episode_is_done = current_episode_rewards < EARLY_STOPPING_SCORE
+
+        if self.episode_duration[-1] < skip_steps: # On ne met pas en mémoire le zoom de début d'épisode
+            return episode_is_done
+
+        self.memory.push(state, action, next_state, reward, not_done)
+
+        return episode_is_done
+    
 
     def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
         """
@@ -97,8 +143,8 @@ class DQNAgent(SuperAgent):
 
         elif self.steps_done % int(1/TAU) == 0:
             # Hard refresh every 1/TAU
-            print("\n\n\nHARD REFRESH")
-            self.target_net.load_state_dict(target_net_state_dict)
+            self.target_net.load_state_dict(policy_net_state_dict)
+
 
     def save_model(self, add_episode=True) -> None:
         """
@@ -135,16 +181,11 @@ class DQNAgent(SuperAgent):
             folder (str): Folder to the model
         """
 
-        policy_file = glob.glob(folder + '/policy_*.model')[0]
-        target_file = glob.glob(folder + '/target_*.model')[0]
+        policy_file = glob.glob(folder + '/policy_*.model')[-1]
+        target_file = glob.glob(folder + '/target_*.model')[-1]
         self.policy_net.load_state_dict(torch.load(policy_file, map_location=DEVICE))
         self.target_net.load_state_dict(torch.load(target_file, map_location=DEVICE))
         print(f'Loaded model weights : {policy_file} from {folder}')
-
-        # with open(folder + '/params.json') as my_file:
-        #     hyper_dict = json.load(my_file)
-        #     print(''.join([f"- {key} : {val} \n" for key, val in hyper_dict.items()]))
-
 
     def logging(self):
         """Logs some statistics on the agent running as a function of time

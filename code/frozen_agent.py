@@ -7,9 +7,12 @@ import random
 from params import *
 from datetime import datetime
 from super_agent import DQNAgent
-from network import LinearDQN
+from network import LinearDQN, LinearA2C
 from buffer import Transition
 from display import Plotter, dqn_diagnostics
+
+networks = {'LinearDQN':LinearDQN, 
+            'LinearA2C':LinearA2C}
 
 class FrozenDQNAgentBase(DQNAgent):
 
@@ -22,9 +25,10 @@ class FrozenDQNAgentBase(DQNAgent):
             show_diagnostics (bool): Whether you want to show detailed info
             on the DQN network while it works. Defaults to False
         """
+        ChosenNetwork = networks[NETWORK]
         x_dim = 1
-        self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
-        self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
+        self.policy_net = ChosenNetwork(x_dim, y_dim).to(DEVICE)
+        self.target_net = ChosenNetwork(x_dim, y_dim).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         super().__init__(**kwargs)
 
@@ -94,29 +98,13 @@ class FrozenDQNAgentBase(DQNAgent):
 
         if len(self.memory) < BATCH_SIZE: return 0
 
-        transitions = self.memory.sample(BATCH_SIZE)
+        (state_batch, 
+         action_batch, 
+         next_state_batch, 
+         reward_batch, 
+         not_done_batch) = self.memory.sample(BATCH_SIZE)
 
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
-
-        batch = Transition(*zip(*transitions)) # Needs to pass this from buffer class
-
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
-
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=DEVICE, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
-        all_next_states = [s.item() if s is not None else -1
-                           for s in batch.next_state ]
-
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
-
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
         state_action_values = self.policy_net(state_batch.unsqueeze(-1)).gather(1, action_batch)
@@ -126,45 +114,42 @@ class FrozenDQNAgentBase(DQNAgent):
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
+        rewards_tensor = torch.tile(reward_batch, (1,4)).to(DEVICE)
 
         with torch.no_grad():
-            future_state_values[non_final_mask,:] = self.target_net(non_final_next_states.unsqueeze(-1))
+            future_state_values = rewards_tensor + not_done_batch \
+                * self.target_net(next_state_batch.unsqueeze(-1)) * GAMMA
+            best_action_values = future_state_values.max(1).values
 
-        future_state_values = (future_state_values * GAMMA) + rewards_tensor
-        best_action_values = future_state_values.max(1).values
-
-        # Compute Loss
-        criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, best_action_values.unsqueeze(1))
+        # Compute MSE loss
+        loss = self.lossfun(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
-
-         #Plotting
-        if self.steps_done % DISPLAY_EVERY == 0:
-            Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards',
-                                          self.episode_rewards,
-                                          rolling=10,
-                                          per_episode=True)
 
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        # # In-place gradient clipping
+        # torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        # Fancy print
         rwd_ep = self.episode_rewards[-1]
         lr = self.scheduler.optimizer.param_groups[0]['lr']
         act = self.last_action.item()
 
-        print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+        # # Plotting
+        # if self.steps_done % DISPLAY_EVERY == 0:
+        #     Plotter().plot_data_gradually('Loss', self.losses)
+        #     Plotter().plot_data_gradually('Rewards',
+        #                                   self.episode_rewards,
+        #                                   rolling=10,
+        #                                   per_episode=True)
+
+        # Fancy print
+        print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':15s} | {'Loss':8s} |" \
             + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
         print(f" 🎄  🎄  || " \
             + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
-            + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+            + f'{self.episode:7.0f} / {NUM_EPISODES:5.0f} | ' \
             + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
             + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
 

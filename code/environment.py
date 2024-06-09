@@ -1,14 +1,19 @@
 import gymnasium as gym
 from itertools import count
 import torch
-from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY
+from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY, SAVE_EVERY
 from gymnasium.utils.save_video import save_video # type: ignore
+from super_agent import DQNAgent
 
 class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
         self.env = env_gym
+        self.type = env_gym.unwrapped.spec.id
+        print(self.type)
+        self.skip_steps = 50 if 'CarRacing' in self.type else 0 
+        print(self.skip_steps)
 
-    def run_episode(self, agent) -> int:
+    def run_episode(self, agent:DQNAgent) -> int:
         """
         Runs a single episode of the environment using the provided agent.
         Store transition in memory and move to the next state.
@@ -25,16 +30,12 @@ class Environment():
         for t in count():
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
+            next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
             reward = torch.tensor([reward], device=DEVICE)
-            done = terminated or truncated
-
-            if done:
-                next_state = None
-            else:
-                next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+            not_done = torch.tensor([(not terminated) and (not truncated)], device=DEVICE)
 
             # Store the transition in memory
-            reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            reset = agent.update_memory(state, action, next_state, reward, not_done, skip_steps=self.skip_steps) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
             agent.logging()
 
             # Move to the next state
@@ -46,11 +47,11 @@ class Environment():
             # Update of the target network's weights
             agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
-            if done or reset: break
+            if terminated or truncated or reset: break
 
         return t
 
-    def run_episode_memory(self, agent) -> int:
+    def run_episode_memory(self, agent:DQNAgent) -> int:
         """
         Runs a single episode of the environment using the provided agent. With a multiframed input
         Store transition in memory and move to the next state.
@@ -72,21 +73,15 @@ class Environment():
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
             observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
-            done = terminated or truncated
 
-            if done:
-                next_state = None
-            else: #Creates the next state by appending the new observation, popping the first one from the list
-                # and then transforming it to the right format
-                batch.append(torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0))
-                batch.pop(0)
-                next_state = torch.cat(batch,-1)
+            not_done = torch.tensor([(not terminated) and (not truncated)], device=DEVICE)
+            batch.append(torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0))
+            batch.pop(0)
+            next_state = torch.cat(batch,-1)
 
             # Store the transition in memory
-            reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            reset = agent.update_memory(state, action, next_state, reward, not_done) # , self.env.get_wrapper_attr('desc')
             agent.logging()
-
-            if reset: break
 
             # Move to the next state
             state = next_state
@@ -94,23 +89,21 @@ class Environment():
             # Perform one step of the optimization (on the policy network)
             agent.optimize_model()
 
-            # Soft update of the target network's weights
-            # θ′ ← τ θ + (1 −τ )θ′
+            # Update of target net weights (hard or soft)
             agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
 
-            if done:
-                break
+            if terminated or truncated or reset: break
 
         return t
 
     def recording(self, agent):
-        is_best_run = agent.episode_rewards[-1] = max(agent.episode_rewards)
-        if is_best_run:
-            save_video(
-                frames = self.env.render(),
-                video_folder=agent.folder,
-                fps=30,
-                name_prefix='recording',
-                step_starting_index=0,
-                episode_index=agent.episode,
-            )
+        # If we don't train, it's nice to have a video !
+        save_video(
+            frames = self.env.render(),
+            video_folder=agent.folder,
+            episode_trigger = lambda x: x % SAVE_EVERY == 0,
+            fps=30,
+            name_prefix='recording',
+            step_starting_index=0,
+            episode_index=agent.episode,
+        )
