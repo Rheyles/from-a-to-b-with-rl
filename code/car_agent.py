@@ -19,6 +19,7 @@ networks = {'ConvDQN_3layers_small':ConvDQN_3layers_small,
             'ConvDQN_3layers_classic':ConvDQN_3layers_classic,
             'ConvDQN_2layers_small':ConvDQN_2layers_small,
             'ConvDQN_2layers_classic':ConvDQN_2layers_classic,
+            'ConvDQN2LayersBrice':ConvDQN2layersBrice,
             'ConvA2C':ConvA2C
               }
 
@@ -147,10 +148,10 @@ class CarDQNAgent(DQNAgent):
         with torch.no_grad():
             future_state_values = rewards_tensor + not_done_batch * \
                 self.target_net(next_state_batch) * GAMMA
-            best_action_values = future_state_values.max(1).values
+            best_action_values = future_state_values.max(1).values.unsqueeze(-1)
 
         # Compute MSE loss
-        loss = self.lossfun(state_action_values, best_action_values.unsqueeze(1))
+        loss = self.lossfun(state_action_values, best_action_values)
         self.losses.append(float(loss))
 
         # Optimize the model

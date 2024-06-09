@@ -42,8 +42,6 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-
-
 class TorchMemory():
     """ Maybe a more optimized memory based on PytorchRL 
     package (not big I promise). Has retro-compatibility

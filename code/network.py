@@ -73,25 +73,44 @@ class ConvDQN_2layers_classic(nn.Module):
 class ConvDQN_2layers_small(nn.Module):
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN_2layers_small, self).__init__()
-        self.conv1 = nn.Sequential(
+        self.net = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 6, kernel_size=7, stride=3,),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=dropout_rate))
-        self.conv2 = nn.Sequential(
+            nn.Dropout(p=dropout_rate),
             nn.Conv2d(6, 12, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=dropout_rate))
-        self.lin1 = nn.Sequential(
+            nn.Dropout(p=dropout_rate),
             nn.Flatten(),
-            nn.Linear(300, n_actions))
+            nn.Linear(300, n_actions)
+        )
 
     def forward(self, x):
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.lin1(out)
-        return out
+        return self.net(x)
+     
+
+
+class ConvDQN2layersBrice(nn.Module):
+    def __init__(self, n_actions, dropout_rate=0.0):
+        super(ConvDQN2layersBrice, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(MULTIFRAME, 16, kernel_size=7, stride=3,),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate),
+            nn.Conv2d(16, 32, kernel_size=4, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate),
+            nn.Flatten(),
+            nn.Linear(800, 64),
+            nn.ReLU(),
+            nn.Linear(64, n_actions)
+        )
+
+    def forward(self, x):
+        return self.net(x)
 
 
 class ConvDQN_3layers_small(nn.Module):

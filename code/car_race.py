@@ -13,7 +13,7 @@ print(f'Saving video : {RECORD_VIDEO}, saving models/video every {SAVE_EVERY}')
 
 # Initialize Agent
 agt = agent.CarDQNAgent(env.env.action_space.n, dropout_rate=DROPOUT_RATE, network=NETWORK)
-# agt.load_model("./models/0608_2309_CarDQNAgent")
+agt.load_model("./models/0609_2325_CarDQNAgent")
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, {MULTIFRAME} multiframe , {IDLENESS} idleness')
 print(f'Optimizer : {OPTIMIZER} optimizer, {LOSS} loss, {REGULARIZATION} L2 regularization coeff.')
 print(f'Network : {NETWORK}, {NETWORK_REFRESH_STRATEGY} net refresh , {DROPOUT_RATE} dropout rate\n') 
