@@ -108,7 +108,7 @@ class ConvA2C(nn.Module):
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvA2C, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=9, stride=1),
+            nn.Conv2d(3, 32, kernel_size=9, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))

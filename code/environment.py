@@ -104,7 +104,7 @@ class Environment():
         return t
 
     def recording(self, agent):
-        is_best_run = agent.episode_rewards[-1] = max(agent.episode_rewards)
+        is_best_run = agent.episode_rewards[-1] == max(agent.episode_rewards)
         if is_best_run:
             save_video(
                 frames = self.env.render(),

@@ -377,7 +377,7 @@ class CarA2CAgent(SuperAgent):
         pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
 
         loss = (val_loss+pol_loss).mean()
-        print(loss.item())
+        # print(loss.item())
         self.losses.append(float(loss))
 
         self.optimizer.zero_grad()
