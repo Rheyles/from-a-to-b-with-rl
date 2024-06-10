@@ -27,20 +27,23 @@ class LinearA2C(nn.Module):
         super().__init__(*args, **kwargs)
         self.actor = nn.Sequential(
             nn.Linear(n_observations, 32), nn.ReLU(inplace = True),
+            nn.Linear(32,32), nn.ReLU(inplace = True),
             nn.Linear(32, n_actions),
-            nn.Softmax(),
+            nn.Softmax()
         )
 
         self.critic = nn.Sequential(
             nn.Linear(n_observations+1, out_features = 64), #Added the +1 to account for the action
             nn.ReLU(inplace = True),
-            nn.Linear(in_features = 64, out_features = 1),
-            nn.Tanh()
+            nn.Linear(64,64), nn.ReLU(inplace = True),
+            nn.Linear(in_features = 64, out_features = 1)
         )
+        # print(self.actor[0].weight)
 
     def forward(self, state, action = None):
 
         y_pol = self.actor(state)
+        # print(y_pol)
         if action is None:
             return None, y_pol
         y_val = self.critic(torch.concat((state,action), dim = 1))
