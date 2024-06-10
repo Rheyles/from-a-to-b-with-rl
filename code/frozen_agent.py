@@ -30,6 +30,7 @@ class FrozenDQNAgentBase(DQNAgent):
         self.policy_net = ChosenNetwork(x_dim, y_dim).to(DEVICE)
         self.target_net = ChosenNetwork(x_dim, y_dim).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.reward_threshold = 10 # Will never be reached, but it's okay since we save often
         super().__init__(**kwargs)
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:

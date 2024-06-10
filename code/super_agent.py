@@ -199,11 +199,12 @@ class DQNAgent(SuperAgent):
             folder (str): Folder to the model
         """
 
-        policy_file = glob.glob(folder + '/policy_*.model')[-1]
-        target_file = glob.glob(folder + '/target_*.model')[-1]
-        self.policy_net.load_state_dict(torch.load(policy_file, map_location=DEVICE))
-        self.target_net.load_state_dict(torch.load(target_file, map_location=DEVICE))
-        print(f'Loaded model weights : {policy_file} from {folder}')
+        policy_files = sorted(glob.glob(folder + '/policy_*.model'))
+        target_files = sorted(glob.glob(folder + '/target_*.model'))
+
+        self.policy_net.load_state_dict(torch.load(policy_files[-1], map_location=DEVICE))
+        self.target_net.load_state_dict(torch.load(target_files[-1], map_location=DEVICE))
+        print(f'Loaded model weights : {policy_files[-1]} from {folder}')
 
     def logging(self):
         """Logs some statistics on the agent running as a function of time

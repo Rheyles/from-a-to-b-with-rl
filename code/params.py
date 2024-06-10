@@ -1,7 +1,7 @@
 import torch
 
 
-NUM_EPISODES = 3000
+NUM_EPISODES = 1000
 
 # Logging and whatnot -----------------------------------------------------------------
 
@@ -37,13 +37,13 @@ TAU = 0.001
 # EPS_START is the starting value of epsilon
 # EPS_END is the final value of epsilon
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
-EPS_START = 0.45
+EPS_START = 1
 EPS_END = 0.05
 EPS_DECAY = 100000
 
 # MEM_SIZE is the size of the ReplayMemory buffer
 MEM_TYPE = 'torch' # 'Torch' or 'Legacy'
-MEM_SIZE = 5000
+MEM_SIZE = 15000
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
 BATCH_SIZE = 32

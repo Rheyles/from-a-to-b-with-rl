@@ -109,7 +109,7 @@ class CarDQNAgent(DQNAgent):
             else:
                 # If action is selected at random, give a bit of extra weight
                 # on hitting the gas
-                action = np.random.choice(flatdim(act_space), p=[0.10, 0.2, 0.2, 0.30, 0.2])
+                action = np.random.choice(flatdim(act_space), p=[0.05, 0.2, 0.2, 0.30, 0.25])
                 action = torch.tensor([[action]], device=DEVICE, dtype=torch.long)
 
             self.last_action = action
