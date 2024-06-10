@@ -19,31 +19,37 @@ class LinearDQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-class LinearA2C(nn.Module):
+class LinearA2CActor(nn.Module):
 
     def __init__(self, n_observations, n_actions, *args, **kwargs) -> None:
 
         super().__init__(*args, **kwargs)
         self.actor = nn.Sequential(
-            nn.Linear(n_observations, 300), nn.ReLU(inplace = True),
-            nn.Linear(300, n_actions),
-            nn.Softmax(),
+            nn.Linear(n_observations, 64), nn.ReLU(inplace = True),
+            nn.Linear(64,64), nn.ReLU(inplace = True),
+            nn.Linear(64, n_actions),
+            nn.Softmax(dim=1)
         )
+
+    def forward(self, state):
+        y_pol = self.actor(state)
+        return y_pol
+
+
+class LinearA2CCritic(nn.Module):
+    def __init__(self, n_observations, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 9249, out_features = 300),
+            nn.Linear(n_observations+1, out_features = 64), #Added the +1 to account for the action
             nn.ReLU(inplace = True),
-            nn.Linear(in_features = 300, out_features = 1),
-            nn.Tanh()
-        )
+            nn.Linear(64,64), nn.ReLU(inplace = True),
+            nn.Linear(in_features = 64, out_features = 1)
+            )
 
-    def forward(self, state, action = None):
-
-        y_pol = self.actor(state)
-        if action is None:
-            return None, y_pol
+    def forward(self, state, action):
         y_val = self.critic(torch.concat((state,action), dim = 1))
-        return y_val, y_pol
+        return y_val
 
 
 class ConvDQN2layersClassic(nn.Module):

@@ -6,13 +6,13 @@ import random
 
 from params import *
 from datetime import datetime
-from super_agent import DQNAgent
-from network import LinearDQN, LinearA2C
+from super_agent import DQNAgent, SuperAgent
+from network import LinearDQN, LinearA2CActor, LinearA2CCritic
 from buffer import Transition
 from display import Plotter, dqn_diagnostics
 
 networks = {'LinearDQN':LinearDQN,
-            'LinearA2C':LinearA2C}
+            'LinearA2C':(LinearA2CActor,LinearA2CCritic)}
 
 class FrozenDQNAgentBase(DQNAgent):
     def __init__(self, y_dim:int,
@@ -522,3 +522,222 @@ class FrozenDoubleDQNAgent(FrozenDQNAgentBase):
             for key in policy_net_state_dict:
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             self.targets_net[i].load_state_dict(target_net_state_dict)
+
+class FrozenA2CAgentBase(SuperAgent):
+
+    def __init__(self, y_dim:int, **kwargs) -> None:
+        """
+
+        Args:
+            x_dim (int): Size of model input
+            y_dim (int): Size of model output
+            show_diagnostics (bool): Whether you want to show detailed info
+            on the DQN network while it works. Defaults to False
+        """
+        super().__init__(**kwargs)
+        x_dim = 1
+        self.actor_net = networks[NETWORK][0](x_dim, y_dim).to(DEVICE)
+        self.critic_net = networks[NETWORK][1](x_dim).to(DEVICE)
+
+        self.epsilon = EPS_START
+        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=INI_LR)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max',
+             factor=SCHEDULER_FACTOR,
+             min_lr = MIN_LR,
+             patience=SCHEDULER_PATIENCE)
+        self.adv = [0]
+        self.pol_loss = [0]
+        self.already_there = []
+        self.rewards = []
+
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """
+
+        Agent selects one of four actions to take either as a prediction of the model or randomly:
+        The chances of picking a random action are high in the beginning and decrease with number of iterations
+
+        Args:
+            act_space : Action space of environment
+            state (gym.ObsType): Observation
+
+        Returns:
+            act ActType : Action that the agent performs
+        """
+
+        sample = random.random()
+        self.epsilon = EPS_END + (EPS_START - EPS_END) * \
+            np.exp(-self.steps_done / EPS_DECAY)
+        self.episode_duration[-1]+=1 #Update the duration of the current episode
+        self.steps_done+=1 #Update the number of steps within one episode
+        self.time = (datetime.now() - self.creation_time).total_seconds()
+
+        if sample > self.epsilon or not self.exploration:
+            with torch.no_grad():
+                # torch.no_grad() used when inference on the model is done
+                # t.max(1) will return the largest column value of each row.
+                # second column on max result is index of where max element was
+                # found, so we pick action with the larger expected reward.
+                _ , result = self.actor_net(state.unsqueeze(-1))
+                # print(result.shape)
+                action = result.argmax(1)
+        else:
+            action = torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
+
+        self.last_action = action
+        return action
+
+    def end_episode(self) -> None:
+        """
+        All the actions to proceed when an episode is over
+
+        Args:
+            episode_duration (int): length of the episode
+        """
+        self.episode_rewards.append(sum(self.rewards[-1 * self.episode_duration[-1]:]))
+        self.episode_duration.append(0)
+        self.episode += 1
+        self.scheduler.step(metrics=self.episode_rewards[-1])
+
+    def optimize_model(self) -> list:
+        """
+
+        This function runs the optimization of the model:
+        it takes a batch from the buffer, creates the non final mask and computes:
+        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
+        returns the computed loss
+
+        Args:
+            device (_type_, optional): Device to run computations on. Defaults to DEVICE.
+
+        Returns:
+            losses (list): Calculated Loss
+        """
+        if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
+            return
+
+        if len(self.memory) < BATCH_SIZE: return 0
+
+        transitions = self.memory.sample(BATCH_SIZE)
+
+        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+        # detailed explanation). This converts batch-array of Transitions
+        # to Transition of batch-arrays.
+
+        batch = Transition(*zip(*transitions)) # Needs to pass this from buffer class
+
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+
+        # non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+        #                                     batch.next_state)), device=DEVICE, dtype=torch.bool)
+        # non_final_next_states = torch.cat([s for s in batch.next_state
+        #                                             if s is not None])
+        # all_next_states = [s.item() if s is not None else -1
+        #                    for s in batch.next_state ]
+
+        state_batch = torch.cat(batch.state)
+        # action_batch = torch.cat(batch.action)
+        reward_batch = torch.cat(batch.reward)
+
+        y_pol_pred = self.actor_net(state_batch.unsqueeze(-1))
+
+        # print(state_batch[0])
+        # print(f"y_pol_pred {y_pol_pred[0]}")
+        # future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
+        # rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
+
+        # print(f" y val pred {y_val_pred}")
+        # print(f"y pol pred {y_pol_pred}")
+        # with torch.no_grad():
+        #     _, next_actions = self.net(non_final_next_states.unsqueeze(-1))
+        #     next_actions = next_actions.max(1).indices
+        #     future_state_values[non_final_mask,:], _ = self.net(non_final_next_states.unsqueeze(-1), next_actions.unsqueeze(-1))
+        y_val_true = reward_batch.unsqueeze(-1) #+ GAMMA * future_state_values
+
+
+        # print(f"reward {reward_batch}")
+        # print(f"y pol pred {y_pol_pred[0]}")
+        # print(f"y_val_true {y_val_true[0]}")
+        # print(f"y_val_pred {y_val_pred[0]}")
+        adv = y_val_true - y_val_pred
+        # print(f"adv {adv}")
+        # print(f"adv {adv.T.shape}")
+        val_loss = 0.5 * torch.square(adv)
+        pol_loss = -(adv * torch.log(y_pol_pred+1e-6))
+        # print(f"y pol pred {torch.log(y_pol_pred+1e-6)[0]}")
+        # print(f"val loss {val_loss[0]}")
+        # print(f"pol loss {pol_loss[0]}")
+
+        loss = (val_loss+pol_loss).mean()
+        self.losses.append(float(loss))
+        self.adv.append(float(adv[0][0]))
+        self.pol_loss.append(float(pol_loss[0][0]))
+
+        # print(f"loss {loss}")
+
+        #Plotting
+        if self.steps_done % DISPLAY_EVERY == 0:
+            Plotter().plot_data_gradually('Loss', self.losses)
+            Plotter().plot_data_gradually('Adv', self.adv)
+            Plotter().plot_data_gradually('Rewards',
+                                          self.episode_rewards,
+                                          per_episode=True)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
+        self.optimizer.step()
+        # input('Continue?')
+
+
+        # Fancy print
+        # rwd_ep = self.episode_rewards[-1]
+        # lr = self.scheduler.optimizer.param_groups[0]['lr']
+        # act = self.last_action.item()
+
+        # print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+        #     + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+        # print(f" 🎄  🎄  || " \
+        #     + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+        #     + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+        #     + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+        #     + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
+
+        # print("\033[F"*2, end='')
+
+        return self.losses
+
+    def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
+        """Empty function that just allows the environment code to run
+
+        Args:
+            strategy (_type_, optional): _description_. Defaults to NETWORK_REFRESH_STRATEGY.
+        """
+        pass
+
+    def update_memory(self, state, action, next_state, reward) -> None:
+        # print(state.item())
+        # print(len(self.already_there))
+        # if reward == 1:
+        #     reward += 9
+
+        # if state.item() not in self.already_there:
+        #     self.already_there.append(state.item())
+        #     reward +=0.01
+
+        # # good_cases = [63,62,61,60,55,54,53,52,47,46,45,44,39,38,37,36,35,31,30,29,28]
+        # if int(state.item()) > 55:
+        #     reward += 0.05
+
+        # if next_state == state:
+        #     reward -= 0.1
+
+        self.memory.push(state, action, next_state, reward)
+        self.rewards.append(reward[0].item())
+
+
+        #print(self.rewards)
+        #print(reward)
+        return None
