@@ -103,10 +103,10 @@ class ConvDQN(nn.Module):
 
 
 
-class ConvA2C(nn.Module):
+class ConvA2CDiscrete(nn.Module):
 
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvA2C, self).__init__()
+        super(ConvA2CDiscrete, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=9, stride=1),
             nn.ReLU(),
@@ -151,3 +151,60 @@ class ConvA2C(nn.Module):
             return None, y_pol
         y_val = self.critic(torch.concat((out,action), dim = 1))
         return y_val, y_pol
+
+
+class ConvA2CContinuous(nn.Module):
+
+    def __init__(self, n_actions, dropout_rate=0.0):
+        super(ConvA2CContinuous, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=9, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=5, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate))
+
+        # self.conv3 = nn.Sequential(
+        #     nn.Conv2d(64, 128, kernel_size=3, stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(kernel_size=2, stride=2),
+        #     nn.Dropout(p=dropout_rate))
+
+
+        self.conv_net  = nn.Sequential(self.conv1,
+                                       self.conv2,
+                                       nn.Flatten())
+
+
+        self.actor_mu = nn.Sequential(
+            nn.Linear(9248, 300), nn.ReLU(inplace = True),
+            nn.Linear(300, n_actions),
+            nn.Tanh(),
+        )
+
+        self.actor_sigma = nn.Sequential(
+            nn.Linear(9248, 300), nn.ReLU(inplace = True),
+            nn.Linear(300, n_actions),
+            nn.ReLU(),
+        )
+
+        self.critic = nn.Sequential(
+            nn.Linear(in_features = 9249, out_features = 300),
+            nn.ReLU(inplace = True),
+            nn.Linear(in_features = 300, out_features = 1),
+            nn.Tanh()
+        )
+
+    def forward(self, state, action = None):
+
+        out = self.conv_net(state)
+        y_pol_mu = self.actor_mu(out)
+        y_pol_sigma = self.actor_sigma(out)
+        if action is None:
+            return None, y_pol_mu, y_pol_sigma
+        y_val = self.critic(torch.concat((out,action), dim = 1))
+        return y_val, y_pol_mu, y_pol_sigma
