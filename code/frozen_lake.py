@@ -5,13 +5,20 @@ import frozen_agent as agent
 from params import *
 
 # Initialize Environment
-env = Environment(gym.make("FrozenLake-v1", map_name='8x8',render_mode='human', is_slippery=False))
+env = Environment(gym.make("FrozenLake-v1",desc=[
+    'SFFHFF',
+    'HFFFFF',
+    'FFHHHH',
+    'FFHFHG',
+    'FHFFFF',
+    'FFFFHF'
+] , map_name='4x4',render_mode='human', is_slippery=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 print(f'\n~~~~~ FROZEN LAKE USING {DEVICE} ~~~~~')
 
 
 # Initialize Agent
-agt = agent.FrozenA2CAgentBase(env.env.action_space.n)
+agt = agent.FrozenDQNAgentObs(env.env.action_space.n, env_map = env.env.get_wrapper_attr('desc'))
 # agt.load_model("./models/0605_1015DQNAgentObs")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer.')
 print(f'Agent explores {agt.exploration} | agent trains {agt.training}\n ')
