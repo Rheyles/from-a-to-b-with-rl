@@ -571,7 +571,8 @@ class FrozenA2CAgentBase(SuperAgent):
         self.folder = 'models/' \
             + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
             + str(self.__class__.__name__) + '/'
-
+        self.adv = [0]
+        self.pol_loss = [0]
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -661,43 +662,70 @@ class FrozenA2CAgentBase(SuperAgent):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
+
         y_val_pred, y_pol_pred = self.net(state_batch.unsqueeze(-1), action_batch)
+
+        # print(state_batch[0])
+        # print(f"y_pol_pred {y_pol_pred[0]}")
         future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32, device = DEVICE)
         rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
 
-
+        # print(f" y val pred {y_val_pred}")
+        # print(f"y pol pred {y_pol_pred}")
         with torch.no_grad():
             _, next_actions = self.net(non_final_next_states.unsqueeze(-1))
             next_actions = next_actions.max(1).indices
             future_state_values[non_final_mask,:], _ = self.net(non_final_next_states.unsqueeze(-1), next_actions.unsqueeze(-1))
         y_val_true = rewards_tensor + GAMMA * future_state_values
 
+        # print(f"rewards_tensor {rewards_tensor}")
+        # print(f"y_val_true {y_val_true}")
+        # print(f"y_val_pred {y_val_pred}")
         adv = y_val_true - y_val_pred
+        # print(f"adv {adv[0]}")
         val_loss = 0.5 * torch.square(adv)
-        pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
+        pol_loss = -(adv * torch.log(y_pol_pred+1e-6))
+        # print(f"y pol pred {torch.log(y_pol_pred+1e-6)[0]}")
+        # print(f"val loss {val_loss}")
+        # print(f"pol loss {pol_loss[0]}")
 
         loss = (val_loss+pol_loss).mean()
-        print(loss.item())
         self.losses.append(float(loss))
+        self.adv.append(float(adv[0][0]))
+        self.pol_loss.append(float(pol_loss[0][0]))
+
+        # print(f"loss {loss}")
+
+        #Plotting
+        if self.steps_done % DISPLAY_EVERY == 0:
+            Plotter().plot_data_gradually('Loss', self.losses)
+            Plotter().plot_data_gradually('Adv', self.adv)
+            Plotter().plot_data_gradually('Pol_Loss', self.pol_loss)
+            Plotter().plot_data_gradually('Rewards',
+                                          self.episode_rewards,
+                                          per_episode=True)
 
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
         self.optimizer.step()
+        # input('Continue?')
+
 
         # Fancy print
-        # rwd_ep = self.episode_rewards[-1]
-        # lr = self.scheduler.optimizer.param_groups[0]['lr']
-        # act = self.last_action.item()
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+        act = self.last_action.item()
 
-        # print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
-        #     + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
-        # print(f" 🎄  🎄  || " \
-        #     + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
-        #     + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
-        #     + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
-        #     + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
+        print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+            + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+        print(f" 🎄  🎄  || " \
+            + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+            + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+            + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+            + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
 
-        # print("\033[F"*2, end='')
+        print("\033[F"*2, end='')
 
         return self.losses
 
