@@ -1,29 +1,27 @@
-import os
 import torch
-import torch.nn as nn
-from PIL import Image
 
 import numpy as np
 import random
-import matplotlib.pyplot as plt
 from datetime import datetime
 from gymnasium.spaces.utils import flatdim
 
 from params import *
 from super_agent import DQNAgent
 from network import *
-from buffer import Transition
 from display import Plotter
 
-networks = {'ConvDQN_3layers_small':ConvDQN_3layers_small, 
-            'ConvDQN_3layers_classic':ConvDQN_3layers_classic,
-            'ConvDQN_2layers_small':ConvDQN_2layers_small,
-            'ConvDQN_2layers_classic':ConvDQN_2layers_classic,
-            'ConvDQN2LayersBrice':ConvDQN2layersBrice,
+
+networks = {'ConvDQN3layersSmall':ConvDQN3layersSmall,
+            'ConvDQN3layersClassic':ConvDQN3layersClassic,
+            'ConvDQN2layersSmall':ConvDQN2layersSmall,
+            'ConvDQN2layersClassic':ConvDQN2layersClassic,
+            'ConvDQN2layersBrice':ConvDQN2layersBrice,
             'ConvA2C':ConvA2C
               }
 
 class CarDQNAgent(DQNAgent):
+    """The Car DQN Agent class, deriving from the DQN Agent class. We add a
+    few specific things in terms of preprocessing."""
 
     def __init__(self, y_dim: int, reward_threshold:float=20, reset_patience:int=250, **kwargs) -> None:
         ChosenNetwork = networks[NETWORK]
@@ -53,6 +51,17 @@ class CarDQNAgent(DQNAgent):
             self.save_model()
 
     def prepro(self, state: torch.Tensor, crop=True) -> torch.Tensor:
+        """Preprocessing for CarDQNAgent. Converts the image to b&w
+        using the GREEN channel of each successive image.
+
+        Args:
+            state (torch.Tensor): a single (or multiple) observation
+            crop (bool, optional, default True): crops the image to remove the
+            controls while keeping a square image.
+
+        Returns:
+            torch.Tensor: the preprocessed frame(s)
+        """
 
         if state is None:
             return None
@@ -127,10 +136,10 @@ class CarDQNAgent(DQNAgent):
 
         if len(self.memory) < BATCH_SIZE: return 0
 
-        (state_batch, 
-         action_batch, 
-         next_state_batch, 
-         reward_batch, 
+        (state_batch,
+         action_batch,
+         next_state_batch,
+         reward_batch,
          not_done_batch) = self.memory.sample(BATCH_SIZE)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the

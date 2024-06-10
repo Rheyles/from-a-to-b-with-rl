@@ -11,7 +11,7 @@ from network import LinearDQN, LinearA2C
 from buffer import Transition
 from display import Plotter, dqn_diagnostics
 
-networks = {'LinearDQN':LinearDQN, 
+networks = {'LinearDQN':LinearDQN,
             'LinearA2C':LinearA2C}
 
 class FrozenDQNAgentBase(DQNAgent):
@@ -98,10 +98,10 @@ class FrozenDQNAgentBase(DQNAgent):
 
         if len(self.memory) < BATCH_SIZE: return 0
 
-        (state_batch, 
-         action_batch, 
-         next_state_batch, 
-         reward_batch, 
+        (state_batch,
+         action_batch,
+         next_state_batch,
+         reward_batch,
          not_done_batch) = self.memory.sample(BATCH_SIZE)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
@@ -139,8 +139,8 @@ class FrozenDQNAgentBase(DQNAgent):
         lr = self.scheduler.optimizer.param_groups[0]['lr']
         act = self.last_action.item()
 
-        # dqn_diagnostics(self, 
-        #                 action_batch, 
+        # dqn_diagnostics(self,
+        #                 action_batch,
         #                 best_action,
         #                 state_batch,
         #                 reward_batch,
@@ -342,20 +342,6 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         self.optimizer.step()
 
         return self.losses
-
-    def update_memory(self, state, action, next_state, reward, env_map):
-        observation = self.prepare_observation(state, env_map)
-        if next_state is None:
-            next_observation = None
-        else:
-            next_observation = self.prepare_observation(next_state, env_map)
-        self.memory.push(observation, action, next_observation, reward)
-        self.rewards.append( self.rewards[-1] + reward[0].item() )
-
-        #print(self.rewards)
-        #print(reward)
-
-
 
 class FrozenDoubleDQNAgent(FrozenDQNAgentBase):
 

@@ -9,6 +9,10 @@ from params import *
 from buffer import ReplayMemory, TorchMemory
 
 class SuperAgent():
+    """The SuperAgent class. Basically an empty
+    shell with plenty of methods that will actually
+    be filled by its children classes (DQNAgent, A2CAgent, ...)"""
+
     def __init__(self, **kwargs) -> None:
         self.exploration = kwargs.get('exploration',True)
         self.training = kwargs.get('training',True)
@@ -43,11 +47,20 @@ class SuperAgent():
 
 
 class DQNAgent(SuperAgent):
+    '''The DeepQNetwork Agent class.
+    Works using :
+    1/ A Memory buffer that stores states, decisions, rewards, ...
+    that allow you to "replay the game" and find where you could have made
+    better decisions through a Q score
+    2/ A (sometimes Deep) neural network that takes observations and spits
+    out an estimated Q score that will be regularly updated to reflect the
+    true Q score that the memory buffer can evaluate.
+    '''
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        
+
         self.epsilon = EPS_START
 
         # Choosing my optimizer
@@ -64,13 +77,13 @@ class DQNAgent(SuperAgent):
                                                  lr=INI_LR,
                                                  weight_decay=REGULARIZATION)
 
-        # Choosing loss function 
+        # Choosing loss function
         if LOSS.lower() == 'mse':
             self.lossfun = nn.MSELoss()
         else:
             self.lossfun = nn.SmoothL1Loss()
 
-        # Memory type 
+        # Memory type
         if MEM_TYPE.lower() == 'legacy':
             self.memory = ReplayMemory(MEM_SIZE)
         elif MEM_TYPE.lower() == 'torch':
@@ -98,16 +111,21 @@ class DQNAgent(SuperAgent):
             print("NOTE : DQN agent default preprocessing >> Not doing anything")
         return state
 
-    def update_memory(self, state:torch.Tensor, 
-                      action:torch.Tensor, 
-                      next_state:torch.Tensor, 
-                      reward:torch.Tensor, 
+    def update_memory(self, state:torch.Tensor,
+                      action:torch.Tensor,
+                      next_state:torch.Tensor,
+                      reward:torch.Tensor,
                       not_done:torch.Tensor,
                       skip_steps=50) -> None:
         """ UPDATE_MEMORY (SUPER_AGENT) defines
         what to do in general when we update the
-        agent memory. """
-        
+        agent memory.
+
+        Optional arg: skip_step (default 50), forces the programme to not store
+        any states at the beginning of each episode (e.g. for CarRace, when they
+        are not useful)
+        """
+
         state = self.prepro(state)
         next_state = self.prepro(next_state)
         reward = reward.unsqueeze(-1)
@@ -123,7 +141,7 @@ class DQNAgent(SuperAgent):
         self.memory.push(state, action, next_state, reward, not_done)
 
         return episode_is_done
-    
+
 
     def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
         """

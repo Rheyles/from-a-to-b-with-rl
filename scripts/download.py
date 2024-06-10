@@ -1,6 +1,6 @@
 import os
 
-# Change these or check them
+# NOTE : Leave model blank to list the available files
 model = '0607_1707_CarDQNAgent'
 # model = ''
 
@@ -17,4 +17,9 @@ else:
     print('Listing files in destination')
     command = f'ssh lewagon@82.67.97.37'
     os.system(command)
-    # Then go through or_folder and dir the resulting folder...
+    # Then
+    # > cd python
+    # > cd from-a-to-b-with-rl
+    # > cd models
+    # > dir
+    # and check the files

@@ -1,3 +1,5 @@
+# Here, we put the custom maps of Frozen Lake
+# in a dict.
 
 maps = {'4x4' : [
         "SFFF",
@@ -5,6 +7,7 @@ maps = {'4x4' : [
         "FFFH",
         "HFFG"
         ],
+
 '5x5_easy' : [
     'SFFFF',
     'HFHFF',

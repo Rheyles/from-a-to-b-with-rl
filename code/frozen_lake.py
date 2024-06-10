@@ -19,8 +19,7 @@ agt = agent.FrozenDQNAgentBase(env.env.action_space.n)
 # agt.load_model("./models/0608_0008_FrozenDQNAgentBase")
 print(f'Agent {agt.__class__.__name__}: exploration {agt.exploration}, training {agt.training}')
 print(f'Optimizer : {OPTIMIZER} optimizer, {LOSS} loss, {REGULARIZATION} L2 regularization coeff.')
-print(f'Network : {agt.policy_net.__class__.__name__}, {NETWORK_REFRESH_STRATEGY} net refresh , {DROPOUT_RATE} dropout rate\n') 
-
+print(f'Network : {agt.policy_net.__class__.__name__}, {NETWORK_REFRESH_STRATEGY} net refresh , {DROPOUT_RATE} dropout rate\n')
 
 try:
     save_model = True

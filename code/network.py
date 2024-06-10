@@ -19,7 +19,6 @@ class LinearDQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-
 class LinearA2C(nn.Module):
 
     def __init__(self, n_observations, n_actions, *args, **kwargs) -> None:
@@ -47,9 +46,15 @@ class LinearA2C(nn.Module):
         return y_val, y_pol
 
 
-class ConvDQN_2layers_classic(nn.Module):
+class ConvDQN2layersClassic(nn.Module):
+    """Manu's 'small CNN model' to avoid the three
+    convolutional layers that other more complex models have.
+    Never tested with the new code.
+    Was not really learning with the old code.
+    """
+
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvDQN_2layers_classic, self).__init__()
+        super(ConvDQN2layersClassic, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 16, kernel_size=3, stride=1,),
             nn.ReLU(),
@@ -69,10 +74,13 @@ class ConvDQN_2layers_classic(nn.Module):
         out = self.conv2(out)
         out = self.lin1(out)
         return out
-    
-class ConvDQN_2layers_small(nn.Module):
+
+class ConvDQN2layersSmall(nn.Module):
+    """A small-scale 2-layer CNN for CarRace : freely inspired from
+    https://github.com/andywu0913/OpenAI-GYM-CarRacing-DQN
+    never really tested with the rest of the new code."""
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvDQN_2layers_small, self).__init__()
+        super(ConvDQN2layersSmall, self).__init__()
         self.net = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 6, kernel_size=7, stride=3,),
             nn.ReLU(),
@@ -83,15 +91,20 @@ class ConvDQN_2layers_small(nn.Module):
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate),
             nn.Flatten(),
-            nn.Linear(300, n_actions)
+            nn.Linear(300, 216),
+            nn.ReLU(),
+            nn.Linear(216, n_actions)
         )
 
     def forward(self, x):
         return self.net(x)
-     
+
 
 
 class ConvDQN2layersBrice(nn.Module):
+    """Brice's CNN for CarRace. This one seems to work
+    quite alright, for reasons that are a bit uncertain
+    Freely adapted from https://github.com/wiitt/DQN-Car-Racing """
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvDQN2layersBrice, self).__init__()
         self.net = nn.Sequential(
@@ -113,9 +126,11 @@ class ConvDQN2layersBrice(nn.Module):
         return self.net(x)
 
 
-class ConvDQN_3layers_small(nn.Module):
+class ConvDQN3layersSmall(nn.Module):
+    """A 'small' version of the three-layer CNN model that we used
+    in week 1 of the project. Not tested """
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvDQN_3layers_small, self).__init__()
+        super(ConvDQN3layersSmall, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 16, kernel_size=5, stride=3),
             nn.ReLU(),
@@ -142,10 +157,11 @@ class ConvDQN_3layers_small(nn.Module):
         return F.softmax(out, dim=-1)
 
 
-class ConvDQN_3layers_classic(nn.Module):
-
+class ConvDQN3layersClassic(nn.Module):
+    """A 'small' version of the three-layer CNN model that we used
+    in week 1 of the project. Not thoroughly tested. """
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvDQN_3layers_classic, self).__init__()
+        super(ConvDQN3layersClassic, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(MULTIFRAME, 32, kernel_size=9, stride=1),
             nn.ReLU(),

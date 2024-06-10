@@ -1,15 +1,16 @@
-import gymnasium as gym
-from itertools import count
 import torch
-from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY, SAVE_EVERY
+import gymnasium as gym
+
+from itertools import count
+from params import *
 from gymnasium.utils.save_video import save_video # type: ignore
-from super_agent import DQNAgent
+from super_agent import DQNAgent, SuperAgent
 
 class Environment():
     def __init__(self, env_gym: gym.Env) -> None:
         self.env = env_gym
         self.type = env_gym.unwrapped.spec.id
-        self.skip_steps = 50 if 'CarRacing' in self.type else 0 
+        self.skip_steps = 50 if 'CarRacing' in self.type else 0
 
     def run_episode(self, agent:DQNAgent) -> int:
         """
@@ -64,7 +65,6 @@ class Environment():
         for _ in range(MULTIFRAME): #Creates a batch of mutiple frames
             batch.append(state)
 
-
         for t in count():
 
             state = torch.cat(batch, -1).to(DEVICE) #Transforms batch into right format
@@ -78,7 +78,7 @@ class Environment():
             next_state = torch.cat(batch,-1)
 
             # Store the transition in memory
-            reset = agent.update_memory(state, action, next_state, reward, not_done) # , self.env.get_wrapper_attr('desc')
+            reset = agent.update_memory(state, action, next_state, reward, not_done, skip_steps=self.skip_steps) # , self.env.get_wrapper_attr('desc')
             agent.logging()
 
             # Move to the next state
@@ -94,12 +94,33 @@ class Environment():
 
         return t
 
-    def recording(self, agent):
-        # If we don't train, it's nice to have a video !
+    def recording(self, agent:SuperAgent):
+        '''A function that records the video of the agent throughout
+        an episode. It calls an episode_trigger function that
+        will activate the recording either when the episode is really good
+        or every SAVE_EVERY episode (i.e. it works like save_model)
+
+        Args
+            agent [SuperAgent class or children classes] : the agent to record
+        Returns
+            None (but saves a video)
+            '''
+
+        def episode_trigger(episode):
+            '''A helper function that takes an episode and
+            returns whether we need to save a video or not. It will
+            work in a similar fashion as the save_model() function '''
+            new_best_score = True
+            if agent.episode > 0:
+                new_best_score = agent.episode_rewards[-1] \
+                    > max(agent.episode_rewards[:-1]) + agent.reward_threshold
+            save_anyway = episode % SAVE_EVERY == 0
+            return new_best_score or save_anyway
+
         save_video(
             frames = self.env.render(),
             video_folder=agent.folder,
-            episode_trigger = lambda x: x % SAVE_EVERY == 0,
+            episode_trigger = episode_trigger,
             fps=30,
             name_prefix='recording',
             step_starting_index=0,
