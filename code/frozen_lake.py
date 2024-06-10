@@ -11,7 +11,7 @@ print(f'\n~~~~~ FROZEN LAKE USING {DEVICE} ~~~~~')
 
 
 # Initialize Agent
-agt = agent.FrozenDQNAgentBase(env.env.action_space.n)
+agt = agent.FrozenA2CAgentBase(env.env.action_space.n)
 # agt.load_model("./models/0605_1015DQNAgentObs")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer.')
 print(f'Agent explores {agt.exploration} | agent trains {agt.training}\n ')
