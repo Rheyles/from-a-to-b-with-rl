@@ -12,7 +12,8 @@ from buffer import Transition
 from display import Plotter, dqn_diagnostics
 
 networks = {'LinearDQN':LinearDQN,
-            'LinearA2C':LinearA2C}
+            'LinearA2C':(LinearA2CActor, LinearA2CCritic),
+            }
 
 class FrozenDQNAgentBase(DQNAgent):
 

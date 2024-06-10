@@ -7,9 +7,9 @@ NUM_EPISODES = 1000
 
 RECORD_VIDEO = True # Supersedes RENDER_MODE !
 RENDER_MODE = 'state_pixels' # 'human' or 'rgb_array' or 'state_pixels'
-RENDER_FPS = 500
+RENDER_FPS = 100
 LOG_EVERY = 500 # Write Buffered Log info every XXX steps
-SAVE_EVERY = 100
+SAVE_EVERY = 100 # Saves video / model every XXX episodes
 DISPLAY_EVERY = 50 # Display / update optimization graphs every XXX steps
 
 # Game parameter -----------------------------------------------------------------
@@ -24,11 +24,11 @@ IDLENESS = 3                # NOTE : ONLY FOR CAR_RACE
 # NETWORK REFRESH STRATEGY ('hard', 'soft') tells you if you either
 # progressively replace your target net (mixing itself with tau * policy_net)
 # or if you do it completely every 1/TAU steps
-NETWORK = 'ConvDQN2layersBrice'
+NETWORK = 'ConvDQN2layersBriceNoCrop'
            # ******* FROZEN_LAKE *******
            # LinearDQN, LinearA2C
            # ******* CAR RACE **********
-           # ConvDQN2layersClassic (from Manu), ConvDQN2layersSmall, ConvDQN2layersBrice
+           # ConvDQN2layersClassic (from Manu), ConvDQN2layersSmall, ConvDQN2layersBrice, ConvDQN2layersBriceNoCrop
            # ConvDQN3layersClassic (what we used in week 1), ConvDQN3layersSmall,
            # ConvA2C
 NETWORK_REFRESH_STRATEGY = 'soft'
@@ -42,11 +42,11 @@ EPS_END = 0.05
 EPS_DECAY = 100000
 
 # MEM_SIZE is the size of the ReplayMemory buffer
-MEM_TYPE = 'torch' # 'Torch' or 'Legacy'
-MEM_SIZE = 15000
+MEM_TYPE = 'legacy' # 'Torch' or 'Legacy'
+MEM_SIZE = 50000
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
 # GAMMA is the discount factor of long-term reward
 GAMMA = 0.95
@@ -57,9 +57,9 @@ OPTIMIZER = 'adamw' # ADAM, RMSPROP, ADAMW
 REGULARIZATION = 0 # L2 Regularization coefficient (L1 and ElasticNet not simply implemented ...)
 DROPOUT_RATE = 0.2
 INI_LR = 2e-4   # LR is the learning rate of the optimizer
-MIN_LR = 2e-6   # How low it can (will) get due to the optimizer
-SCHEDULER_FACTOR = 0.7
-SCHEDULER_PATIENCE = 50 # Patience of the scheduler that decrease the learning rate in the car race env
+MIN_LR = 4e-5   # How low it can (will) get due to the optimizer
+SCHEDULER_FACTOR = 0.5
+SCHEDULER_PATIENCE = 200 # Patience of the scheduler that decrease the learning rate in the car race env
 
 
 # Leave this alone unless you know what you are doing

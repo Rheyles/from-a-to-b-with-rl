@@ -16,20 +16,35 @@ networks = {'ConvDQN3layersSmall':ConvDQN3layersSmall,
             'ConvDQN2layersSmall':ConvDQN2layersSmall,
             'ConvDQN2layersClassic':ConvDQN2layersClassic,
             'ConvDQN2layersBrice':ConvDQN2layersBrice,
+            'ConvDQN2layersBriceNoCrop':ConvDQN2layersBriceNoCrop,
             'ConvA2C':ConvA2C
               }
 
 class CarDQNAgent(DQNAgent):
     """The Car DQN Agent class, deriving from the DQN Agent class. We add a
-    few specific things in terms of preprocessing."""
+    few specific things in terms of preprocessing.
 
-    def __init__(self, y_dim: int, reward_threshold:float=20, reset_patience:int=250, **kwargs) -> None:
+    ARGS :
+        y_dim : it should correspond to the action space (N actions in discrete case)
+        reward_threshold : if we exceed our best score by that threshold, we
+            save the model
+        reset_patience : ????? no longer sure about it
+        crop_image [True/False] : whether you want to crop the image before
+            injecting it into the network. In that case, the agent has no information
+            about its speed / etc. through these controls.
+    """
+
+    def __init__(self, y_dim: int,
+                 reward_threshold:float=20,
+                 reset_patience:int=250,
+                 crop_image=True, **kwargs) -> None:
         ChosenNetwork = networks[NETWORK]
         self.policy_net = ChosenNetwork(y_dim, dropout_rate=DROPOUT_RATE).to(DEVICE)
         self.target_net = ChosenNetwork(y_dim, dropout_rate=DROPOUT_RATE).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         super().__init__(**kwargs)
 
+        self.crop_image = crop_image
         self.reward_threshold = reward_threshold
         self.max_reward = 0
         self.reset_patience = reset_patience
@@ -50,7 +65,7 @@ class CarDQNAgent(DQNAgent):
             self.max_reward = self.episode_rewards[-1]
             self.save_model()
 
-    def prepro(self, state: torch.Tensor, crop=True) -> torch.Tensor:
+    def prepro(self, state: torch.Tensor) -> torch.Tensor:
         """Preprocessing for CarDQNAgent. Converts the image to b&w
         using the GREEN channel of each successive image.
 
@@ -63,14 +78,11 @@ class CarDQNAgent(DQNAgent):
             torch.Tensor: the preprocessed frame(s)
         """
 
-        if state is None:
-            return None
-
         state = state[:,:,:,1::3] / 256
-        if crop:
+        if self.crop_image:
             crop_height = int(state.shape[1] * 0.88)
             crop_w = int(state.shape[2] * 0.07)
-        state = state[:, :crop_height, crop_w:-crop_w, :]
+            state = state[:, :crop_height, crop_w:-crop_w, :]
 
         return state.moveaxis(-1, 1)
 
