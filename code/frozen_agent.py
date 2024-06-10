@@ -15,15 +15,15 @@ networks = {'LinearDQN':LinearDQN,
             'LinearA2C':LinearA2C}
 
 class FrozenDQNAgentBase(DQNAgent):
-
-    def __init__(self, y_dim:int, **kwargs) -> None:
+    def __init__(self, y_dim:int,
+                 **kwargs) -> None:
         """
+        The Basic Frozen Agent using DQN. Is probably
+        a bit stupid, but we can help him.
 
         Args:
             x_dim (int): Size of model input
             y_dim (int): Size of model output
-            show_diagnostics (bool): Whether you want to show detailed info
-            on the DQN network while it works. Defaults to False
         """
         ChosenNetwork = networks[NETWORK]
         x_dim = 1
@@ -82,7 +82,6 @@ class FrozenDQNAgentBase(DQNAgent):
 
     def optimize_model(self) -> list:
         """
-
         This function runs the optimization of the model:
         it takes a batch from the buffer, creates the non final mask and computes:
         Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient

@@ -4,4 +4,4 @@
 *.mp4
 __pycache__
 models/
-params.py
+code/params.py

@@ -7,10 +7,15 @@ from gymnasium.utils.save_video import save_video # type: ignore
 from super_agent import DQNAgent, SuperAgent
 
 class Environment():
-    def __init__(self, env_gym: gym.Env) -> None:
+    '''Our wrapper for the environment class '''
+
+    def __init__(self,
+                 env_gym: gym.Env,
+                 lake_penalty = 0) -> None:
         self.env = env_gym
         self.type = env_gym.unwrapped.spec.id
         self.skip_steps = 50 if 'CarRacing' in self.type else 0
+        self.lake_penalty = lake_penalty if 'FrozenLake' in self.type else 0
 
     def run_episode(self, agent:DQNAgent) -> int:
         """
@@ -32,6 +37,10 @@ class Environment():
             next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
             reward = torch.tensor([reward], device=DEVICE)
             not_done = torch.tensor([(not terminated) and (not truncated)], device=DEVICE)
+
+            # Frozen lake custom reward, is 0 if environment is not Frozenlake
+            if terminated and reward == 0:
+                reward += self.lake_penalty
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward, not_done, skip_steps=self.skip_steps) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
