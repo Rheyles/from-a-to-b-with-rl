@@ -1,7 +1,7 @@
 import os
 
 # NOTE : Leave model blank to list the available files
-model = '0607_1707_CarDQNAgent'
+model = '0610_1228_CarDQNAgent'
 # model = ''
 
 # Do not change these
@@ -11,6 +11,7 @@ if model != '':
     print('Downloading from destination')
     dest_folder = './models/'
     command = f'scp -r lewagon@82.67.97.37:{or_folder + model} {dest_folder + model}'
+    print(f'Copying to {dest_folder + model}')
     os.system(command)
 
 else:

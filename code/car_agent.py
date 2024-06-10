@@ -71,8 +71,6 @@ class CarDQNAgent(DQNAgent):
 
         Args:
             state (torch.Tensor): a single (or multiple) observation
-            crop (bool, optional, default True): crops the image to remove the
-            controls while keeping a square image.
 
         Returns:
             torch.Tensor: the preprocessed frame(s)

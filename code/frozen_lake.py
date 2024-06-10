@@ -7,7 +7,11 @@ from params import *
 
 # Initialize Environment
 render = RENDER_MODE if not RECORD_VIDEO else 'rgb_array_list'
-env = Environment(gym.make("FrozenLake-v1", desc=maps[FROZEN_MAP_NAME], render_mode=render, is_slippery=False))
+env = Environment(gym.make("FrozenLake-v1",
+                           desc=maps[FROZEN_MAP_NAME],
+                           render_mode=render,
+                           is_slippery=False),
+                  lake_penalty=-1)
 env.env.metadata['render_fps'] = RENDER_FPS
 env.env.spec.max_episode_steps = 250
 env.env._max_episode_steps = 250

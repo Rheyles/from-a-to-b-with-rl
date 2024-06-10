@@ -14,7 +14,7 @@ DISPLAY_EVERY = 50 # Display / update optimization graphs every XXX steps
 
 # Game parameter -----------------------------------------------------------------
 # IDLENESS is the amount of frames during which the agent chooses the same action
-FROZEN_MAP_NAME = '6x6_hard'     # NOTE: ONLY FOR FROZEN_LAKE :  lake_4x4, lake_5x5_easy, lake_5x5_hard, lake_6x6_easy, lake_6x6_hard, lake_8x8
+FROZEN_MAP_NAME = '6x6_easy'     # NOTE: ONLY FOR FROZEN_LAKE :  lake_4x4, lake_5x5_easy, lake_5x5_hard, lake_6x6_easy, lake_6x6_hard, lake_8x8
 EARLY_STOPPING_SCORE = -20  # The score under which we trigger an early stopping of the episode
 MULTIFRAME = 3              # NOTE: ONLY FOR CAR_RACE // MULTIFRAME is the amount of frames you feed into the network // NOTE : HAS TO BE SET TO 1 if the method run_episode is called in the main
 IDLENESS = 3                # NOTE : ONLY FOR CAR_RACE
@@ -32,14 +32,14 @@ NETWORK = 'ConvDQN2layersBriceNoCrop'
            # ConvDQN3layersClassic (what we used in week 1), ConvDQN3layersSmall,
            # ConvA2C
 NETWORK_REFRESH_STRATEGY = 'soft'
-TAU = 0.001
+TAU = 0.005
 
 # EPS_START is the starting value of epsilon
 # EPS_END is the final value of epsilon
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 EPS_START = 1
 EPS_END = 0.05
-EPS_DECAY = 100000
+EPS_DECAY = 30000
 
 # MEM_SIZE is the size of the ReplayMemory buffer
 MEM_TYPE = 'legacy' # 'Torch' or 'Legacy'
