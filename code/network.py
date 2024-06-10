@@ -26,9 +26,9 @@ class LinearA2C(nn.Module):
 
         super().__init__(*args, **kwargs)
         self.actor = nn.Sequential(
-            nn.Linear(n_observations, 32), nn.ReLU(inplace = True),
-            nn.Linear(32,32), nn.ReLU(inplace = True),
-            nn.Linear(32, n_actions),
+            nn.Linear(n_observations, 64), nn.ReLU(inplace = True),
+            nn.Linear(64,64), nn.ReLU(inplace = True),
+            nn.Linear(64, n_actions),
             nn.Softmax()
         )
 

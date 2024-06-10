@@ -22,7 +22,7 @@ class FrozenDQNAgentBase(DQNAgent):
             show_diagnostics (bool): Whether you want to show detailed info
             on the DQN network while it works. Defaults to False
         """
-        x_dim = 1
+        x_dim = kwargs.get('x_dim',1)
         self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
         self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -187,9 +187,11 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         self.policy_net = LinearDQN(x_dim, y_dim).to(DEVICE)
         self.target_net = LinearDQN(x_dim, y_dim).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
-        super().__init__(**kwargs)
+        self.env_map = kwargs.get('env_map', None)
+        assert self.env_map is not None
+        super().__init__(y_dim, x_dim=x_dim,**kwargs)
 
-    def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
+    def prepare_observation(self, state: torch.Tensor) -> torch.Tensor:
         """
         !!! SPECIFIC TO FROZEN LAKE !!!
         Args:
@@ -207,28 +209,28 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
         state = int(state[0].item())
         result = np.zeros((4,1))
-        map_x, map_y = env_map.shape
+        map_x, map_y = self.env_map.shape
 
         if state - map_x >=0 :
-            tile = env_map[(state-map_x)//map_x][(state-map_x)%map_x]
+            tile = self.env_map[(state-map_x)//map_x][(state-map_x)%map_x]
         else :
             tile = b''
         result[0] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
         if state + map_x < map_x * map_y :
-            tile = env_map[(state+map_x)//map_x][(state+map_x)%map_x]
+            tile = self.env_map[(state+map_x)//map_x][(state+map_x)%map_x]
         else :
             tile = b''
         result[1] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
         if (state+1)//map_x == state//map_x :
-            tile = env_map[(state+1)//map_x][(state+1)%map_x]
+            tile = self.env_map[(state+1)//map_x][(state+1)%map_x]
         else :
             tile = b''
         result[2] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
 
         if (state-1)//map_x == state//map_x :
-            tile = env_map[(state-1)//map_x][(state-1)%map_x]
+            tile = self.env_map[(state-1)//map_x][(state-1)%map_x]
         else :
             tile = b''
         result[3] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
@@ -236,7 +238,7 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         return torch.rot90(torch.Tensor(result))
 
 
-    def select_action(self, act_space : torch.Tensor, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
         Agent selects one of four actions to take either as a prediction of the model or randomly:
@@ -249,7 +251,7 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         Returns:
             act ActType : Action that the agent performs
         """
-        observation = self.prepare_observation(state, env_map)
+        observation = self.prepare_observation(state)
         sample = random.random()
         self.epsilon = EPS_END + (EPS_START - EPS_END) * \
             np.exp(-self.steps_done / EPS_DECAY)
@@ -352,14 +354,29 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
+        # Fancy print
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+        act = self.last_action.item()
+
+        print(f" 🎄  🎄  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s} |" \
+            + f" {'ε':7s} | {'η':8s} | {'Rwd/ep':7s} | {'Action'}")
+        print(f" 🎄  🎄  || " \
+            + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+            + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+            + f'{self.losses[-1]:.2e} | {self.epsilon:7.4f} |'\
+            + f' {lr:.2e} | {rwd_ep:7.2f} | {act:7.0f}')
+
+        print("\033[F"*2, end='')
+
         return self.losses
 
-    def update_memory(self, state, action, next_state, reward, env_map):
-        observation = self.prepare_observation(state, env_map)
+    def update_memory(self, state, action, next_state, reward):
+        observation = self.prepare_observation(state)
         if next_state is None:
             next_observation = None
         else:
-            next_observation = self.prepare_observation(next_state, env_map)
+            next_observation = self.prepare_observation(next_state)
         self.memory.push(observation, action, next_observation, reward)
         self.rewards.append( self.rewards[-1] + reward[0].item() )
 
@@ -573,6 +590,8 @@ class FrozenA2CAgentBase(SuperAgent):
             + str(self.__class__.__name__) + '/'
         self.adv = [0]
         self.pol_loss = [0]
+        self.already_there = []
+        self.rewards = []
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -667,8 +686,8 @@ class FrozenA2CAgentBase(SuperAgent):
 
         # print(state_batch[0])
         # print(f"y_pol_pred {y_pol_pred[0]}")
-        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
+        future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
+        # rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
 
         # print(f" y val pred {y_val_pred}")
         # print(f"y pol pred {y_pol_pred}")
@@ -676,17 +695,21 @@ class FrozenA2CAgentBase(SuperAgent):
             _, next_actions = self.net(non_final_next_states.unsqueeze(-1))
             next_actions = next_actions.max(1).indices
             future_state_values[non_final_mask,:], _ = self.net(non_final_next_states.unsqueeze(-1), next_actions.unsqueeze(-1))
-        y_val_true = rewards_tensor + GAMMA * future_state_values
+        y_val_true = reward_batch.unsqueeze(-1) + GAMMA * future_state_values
 
+        # print(f"future{future_state_values.shape}")
+        # print(reward_batch.shape)
+        # print(f"y pol pred {torch.log(y_pol_pred+1e-6)}")
         # print(f"rewards_tensor {rewards_tensor}")
-        # print(f"y_val_true {y_val_true}")
-        # print(f"y_val_pred {y_val_pred}")
+        # print(f"y_val_true {y_val_true.shape}")
+        # print(f"y_val_pred {y_val_pred.shape}")
         adv = y_val_true - y_val_pred
-        # print(f"adv {adv[0]}")
+        # print(f"adv {adv.T}")
+        # print(f"adv {adv.T.shape}")
         val_loss = 0.5 * torch.square(adv)
         pol_loss = -(adv * torch.log(y_pol_pred+1e-6))
         # print(f"y pol pred {torch.log(y_pol_pred+1e-6)[0]}")
-        # print(f"val loss {val_loss}")
+        # print(f"val loss {val_loss[0]}")
         # print(f"pol loss {pol_loss[0]}")
 
         loss = (val_loss+pol_loss).mean()
@@ -700,9 +723,9 @@ class FrozenA2CAgentBase(SuperAgent):
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
             Plotter().plot_data_gradually('Adv', self.adv)
-            Plotter().plot_data_gradually('Pol_Loss', self.pol_loss)
             Plotter().plot_data_gradually('Rewards',
                                           self.episode_rewards,
+                                          cumulative=True,
                                           per_episode=True)
 
         self.optimizer.zero_grad()
@@ -738,8 +761,20 @@ class FrozenA2CAgentBase(SuperAgent):
         pass
 
     def update_memory(self, state, action, next_state, reward) -> None:
+        # print(state.item())
+        # print(len(self.already_there))
+        if state.item() not in self.already_there:
+            self.already_there.append(state.item())
+            reward +=0.01
+
+        # good_cases = [63,62,61,60,55,54,53,52,47,46,45,44,39,38,37,36,35,31,30,29,28]
+        if int(state.item()) > 42:
+            reward += 0.05
+
         self.memory.push(state, action, next_state, reward)
         self.rewards.append(reward[0].item())
+
+
         #print(self.rewards)
         #print(reward)
         return None
