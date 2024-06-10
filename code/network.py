@@ -125,7 +125,6 @@ class ConvDQN2layersBrice(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-
 class ConvDQN3layersSmall(nn.Module):
     """A 'small' version of the three-layer CNN model that we used
     in week 1 of the project. Not tested """
@@ -183,7 +182,6 @@ class ConvDQN3layersClassic(nn.Module):
 
 
 class ConvA2C(nn.Module):
-
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvA2C, self).__init__()
         self.conv1 = nn.Sequential(

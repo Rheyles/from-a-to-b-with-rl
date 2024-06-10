@@ -29,6 +29,14 @@ class SuperAgent():
         self.episode_duration = [0]
         self.last_action = torch.tensor([[0]], dtype=torch.long, device=DEVICE)
 
+    def folder(self):
+        ''' Returns a folder associated to the SuperAgent
+        (hopefully the rea class name will be returned and
+        not just SuperAgent)'''
+
+        return './models/' \
+            + datetime.strftime(self.creation_time, "%m%d_%H%M_") \
+            + str(self.__class__.__name__) + '/'
 
     def select_action(self)-> torch.Tensor:
         pass
@@ -59,7 +67,6 @@ class DQNAgent(SuperAgent):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-
 
         self.epsilon = EPS_START
 
@@ -97,11 +104,8 @@ class DQNAgent(SuperAgent):
              min_lr = MIN_LR,
              patience=SCHEDULER_PATIENCE)
 
-        self.folder = 'models/' \
-            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
-            + str(self.__class__.__name__) + '/'
 
-        os.makedirs(self.folder, exist_ok=True)
+        os.makedirs(self.folder(), exist_ok=True)
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
         """ By default, let's do zero preprocessing.
@@ -176,13 +180,13 @@ class DQNAgent(SuperAgent):
         if add_episode:
             episode_str = f'_{self.episode:05d}'
 
-        os.makedirs(self.folder, exist_ok=True)
+        os.makedirs(self.folder(), exist_ok=True)
         torch.save(self.policy_net.state_dict(),
-                   f'{self.folder}/policy{episode_str}.model')
+                   f'{self.folder()}/policy{episode_str}.model')
         torch.save(self.target_net.state_dict(),
-                   f'{self.folder}/target{episode_str}.model')
+                   f'{self.folder()}/target{episode_str}.model')
 
-        with open(self.folder + '/params.json', 'w') as my_file:
+        with open(self.folder() + '/params.json', 'w') as my_file:
             import params as prm
             my_dict = prm.__dict__
             my_dict['DEVICE'] = DEVICE.__str__()
@@ -210,8 +214,8 @@ class DQNAgent(SuperAgent):
         """Logs some statistics on the agent running as a function of time
         in a .csv file"""
 
-        if not os.path.exists(self.folder + 'log.csv'):
-            with open(self.folder + 'log.csv', 'w') as log_file:
+        if not os.path.exists(self.folder() + 'log.csv'):
+            with open(self.folder() + 'log.csv', 'w') as log_file:
                 log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon,Action\n')
 
         lr = self.scheduler.optimizer.param_groups[0]['lr']
@@ -229,7 +233,7 @@ class DQNAgent(SuperAgent):
             array_test = np.vstack(self.log_buffer)
             self.log_buffer = []
 
-            with open(self.folder + 'log.csv', 'a') as myfile:
+            with open(self.folder() + 'log.csv', 'a') as myfile:
                 np.savetxt(myfile, array_test, delimiter=',',
                            fmt=["%7.2f", "%6d", "%4d",
                                 "%5.3e", "%5.3e", "%5.3e",

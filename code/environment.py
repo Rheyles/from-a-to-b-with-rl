@@ -119,7 +119,7 @@ class Environment():
 
         save_video(
             frames = self.env.render(),
-            video_folder=agent.folder,
+            video_folder=agent.folder(),
             episode_trigger = episode_trigger,
             fps=30,
             name_prefix='recording',
