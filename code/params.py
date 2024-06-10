@@ -14,7 +14,7 @@ RENDER_FPS = 150
 NUM_EPISODES = 1000
 DISPLAY_EVERY = 100 # Display / update optimization graphs every XXX steps
 LOG_EVERY = 500 # Log info every XXX steps
-RECORD_VIDEO = True
+RECORD_VIDEO = False
 
 # MEM_SIZE is the size of the ReplayMemory buffer
 MEM_SIZE = 100000
