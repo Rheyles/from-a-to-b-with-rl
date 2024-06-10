@@ -573,6 +573,8 @@ class FrozenA2CAgentBase(SuperAgent):
             + str(self.__class__.__name__) + '/'
         self.adv = [0]
         self.pol_loss = [0]
+        self.already_there = []
+        self.rewards = []
 
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -667,8 +669,8 @@ class FrozenA2CAgentBase(SuperAgent):
 
         # print(state_batch[0])
         # print(f"y_pol_pred {y_pol_pred[0]}")
-        future_state_values = torch.zeros((BATCH_SIZE,4), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
+        future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
+        # rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
 
         # print(f" y val pred {y_val_pred}")
         # print(f"y pol pred {y_pol_pred}")
@@ -676,17 +678,21 @@ class FrozenA2CAgentBase(SuperAgent):
             _, next_actions = self.net(non_final_next_states.unsqueeze(-1))
             next_actions = next_actions.max(1).indices
             future_state_values[non_final_mask,:], _ = self.net(non_final_next_states.unsqueeze(-1), next_actions.unsqueeze(-1))
-        y_val_true = rewards_tensor + GAMMA * future_state_values
+        y_val_true = reward_batch.unsqueeze(-1) + GAMMA * future_state_values
 
+        # print(f"future{future_state_values.shape}")
+        # print(reward_batch.shape)
+        # print(f"y pol pred {torch.log(y_pol_pred+1e-6)}")
         # print(f"rewards_tensor {rewards_tensor}")
-        # print(f"y_val_true {y_val_true}")
-        # print(f"y_val_pred {y_val_pred}")
+        # print(f"y_val_true {y_val_true.shape}")
+        # print(f"y_val_pred {y_val_pred.shape}")
         adv = y_val_true - y_val_pred
-        # print(f"adv {adv[0]}")
+        # print(f"adv {adv.T}")
+        # print(f"adv {adv.T.shape}")
         val_loss = 0.5 * torch.square(adv)
         pol_loss = -(adv * torch.log(y_pol_pred+1e-6))
         # print(f"y pol pred {torch.log(y_pol_pred+1e-6)[0]}")
-        # print(f"val loss {val_loss}")
+        # print(f"val loss {val_loss[0]}")
         # print(f"pol loss {pol_loss[0]}")
 
         loss = (val_loss+pol_loss).mean()
@@ -700,9 +706,9 @@ class FrozenA2CAgentBase(SuperAgent):
         if self.steps_done % DISPLAY_EVERY == 0:
             Plotter().plot_data_gradually('Loss', self.losses)
             Plotter().plot_data_gradually('Adv', self.adv)
-            Plotter().plot_data_gradually('Pol_Loss', self.pol_loss)
             Plotter().plot_data_gradually('Rewards',
                                           self.episode_rewards,
+                                          cumulative=True,
                                           per_episode=True)
 
         self.optimizer.zero_grad()
@@ -738,8 +744,20 @@ class FrozenA2CAgentBase(SuperAgent):
         pass
 
     def update_memory(self, state, action, next_state, reward) -> None:
+        # print(state.item())
+        # print(len(self.already_there))
+        if state.item() not in self.already_there:
+            self.already_there.append(state.item())
+            reward +=0.01
+
+        # good_cases = [63,62,61,60,55,54,53,52,47,46,45,44,39,38,37,36,35,31,30,29,28]
+        if int(state.item()) > 42:
+            reward += 0.05
+
         self.memory.push(state, action, next_state, reward)
         self.rewards.append(reward[0].item())
+
+
         #print(self.rewards)
         #print(reward)
         return None
