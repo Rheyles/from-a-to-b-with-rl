@@ -108,7 +108,7 @@ class Environment():
         if is_best_run:
             save_video(
                 frames = self.env.render(),
-                video_folder=agent.folder,
+                video_folder=agent.folder(),
                 fps=30,
                 name_prefix='recording',
                 step_starting_index=0,

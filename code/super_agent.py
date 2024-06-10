@@ -27,6 +27,11 @@ class SuperAgent():
 
         self.memory = ReplayMemory(MEM_SIZE)
 
+    def folder(self):
+        return 'models/' \
+            + self.creation_time \
+            + str(self.__class__.__name__) + '/'
+
     def select_action(self)-> torch.Tensor:
         pass
     def optimize_model(self) -> list:
@@ -65,10 +70,6 @@ class DQNAgent(SuperAgent):
              factor=SCHEDULER_FACTOR,
              min_lr = MIN_LR,
              patience=SCHEDULER_PATIENCE)
-
-        self.folder = 'models/' \
-            + datetime.strftime(datetime.now(), "%m%d_%H%M_") \
-            + str(self.__class__.__name__) + '/'
 
         os.makedirs(self.folder, exist_ok=True)
 
