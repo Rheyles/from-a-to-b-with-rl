@@ -540,7 +540,9 @@ class FrozenA2CAgentBase(SuperAgent):
         self.critic_net = networks[NETWORK][1](x_dim).to(DEVICE)
 
         self.epsilon = EPS_START
-        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=INI_LR)
+        self.optimizer_actor = torch.optim.AdamW(self.actor_net.parameters(), lr=INI_LR)
+        self.optimizer_critic = torch.optim.AdamW(self.critic_net.parameters(), lr=INI_LR)
+
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
             (optimizer=self.optimizer,
              mode='max',
@@ -625,8 +627,11 @@ class FrozenA2CAgentBase(SuperAgent):
         # detailed explanation). This converts batch-array of Transitions
         # to Transition of batch-arrays.
 
-        batch = Transition(*zip(*transitions)) # Needs to pass this from buffer class
-
+        (state_batch,
+         action_batch,
+         next_state_batch,
+         reward_batch,
+         not_done_batch) = self.memory.sample(BATCH_SIZE)
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
 
@@ -637,16 +642,20 @@ class FrozenA2CAgentBase(SuperAgent):
         # all_next_states = [s.item() if s is not None else -1
         #                    for s in batch.next_state ]
 
-        state_batch = torch.cat(batch.state)
-        # action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+
 
         y_pol_pred = self.actor_net(state_batch.unsqueeze(-1))
+        y_val_pred = self.critic_net(state_batch.unsqueeze(-1),action_batch) # Make sure the action here should be an action batch
 
         # print(state_batch[0])
         # print(f"y_pol_pred {y_pol_pred[0]}")
         # future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
         # rewards_tensor = torch.tile(reward_batch, (4,1)).T.to(DEVICE)
+        with torch.no_grad():
+            next_actions = self.actor_net(next_state_batch*not_done_batch.unsqueeze(-1))
+            future_state_values = self.critic_net(next_state_batch*not_done_batch.unsqueeze(-1), next_actions.unsqueeze(-1))
+
+        y_val_true = reward_batch.unsqueeze(-1) + GAMMA * future_state_values
 
         # print(f" y val pred {y_val_pred}")
         # print(f"y pol pred {y_pol_pred}")
@@ -654,24 +663,38 @@ class FrozenA2CAgentBase(SuperAgent):
         #     _, next_actions = self.net(non_final_next_states.unsqueeze(-1))
         #     next_actions = next_actions.max(1).indices
         #     future_state_values[non_final_mask,:], _ = self.net(non_final_next_states.unsqueeze(-1), next_actions.unsqueeze(-1))
-        y_val_true = reward_batch.unsqueeze(-1) #+ GAMMA * future_state_values
+        # y_val_true = reward_batch.unsqueeze(-1) #+ GAMMA * future_state_values
 
 
         # print(f"reward {reward_batch}")
         # print(f"y pol pred {y_pol_pred[0]}")
         # print(f"y_val_true {y_val_true[0]}")
         # print(f"y_val_pred {y_val_pred[0]}")
+
+        #Critic Loss - Advantage
         adv = y_val_true - y_val_pred
+        val_loss = 0.5 * torch.square(adv)
+
+        self.optimizer_critic.zero_grad()
+        val_loss.backward()
+        torch.nn.utils.clip_grad_value_(self.actor_net.parameters(), 25)
+        self.optimizer_critic.step()
+
         # print(f"adv {adv}")
         # print(f"adv {adv.T.shape}")
-        val_loss = 0.5 * torch.square(adv)
+
+        #Actor Loss - LogLikelihood
         pol_loss = -(adv * torch.log(y_pol_pred+1e-6))
+        self.optimizer_actor.zero_grad()
+        pol_loss.backward()
+        torch.nn.utils.clip_grad_value_(self.actor_net.parameters(), 25)
+        self.optimizer_actor.step()
+
         # print(f"y pol pred {torch.log(y_pol_pred+1e-6)[0]}")
         # print(f"val loss {val_loss[0]}")
         # print(f"pol loss {pol_loss[0]}")
 
-        loss = (val_loss+pol_loss).mean()
-        self.losses.append(float(loss))
+        # self.losses.append(float(loss))
         self.adv.append(float(adv[0][0]))
         self.pol_loss.append(float(pol_loss[0][0]))
 
@@ -685,10 +708,10 @@ class FrozenA2CAgentBase(SuperAgent):
                                           self.episode_rewards,
                                           per_episode=True)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
-        self.optimizer.step()
+        # self.optimizer.zero_grad()
+        # loss.backward()
+        # torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
+        # self.optimizer.step()
         # input('Continue?')
 
 
@@ -707,7 +730,7 @@ class FrozenA2CAgentBase(SuperAgent):
 
         # print("\033[F"*2, end='')
 
-        return self.losses
+        return self.adv
 
     def update_agent(self, strategy=NETWORK_REFRESH_STRATEGY):
         """Empty function that just allows the environment code to run
