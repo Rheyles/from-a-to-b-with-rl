@@ -14,7 +14,7 @@ class Environment():
                  lake_penalty = 0) -> None:
         self.env = env_gym
         self.type = env_gym.unwrapped.spec.id
-        self.skip_steps = 50 if 'CarRacing' in self.type else 0
+        self.skip_steps = 0 if 'CarRacing' in self.type else 0
         self.lake_penalty = lake_penalty if 'FrozenLake' in self.type else 0
 
     def run_episode(self, agent:DQNAgent) -> int:
@@ -43,7 +43,7 @@ class Environment():
                 reward += self.lake_penalty
 
             # Store the transition in memory
-            reset = agent.update_memory(state, action, next_state, reward, not_done, skip_steps=self.skip_steps) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
+            reset = agent.update_memory(state, action, next_state, reward, not_done) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
             agent.logging()
 
             # Move to the next state
