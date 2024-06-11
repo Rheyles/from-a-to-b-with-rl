@@ -6,12 +6,12 @@ import car_agent as agent
 
 # Initialize Environment
 render_mode = 'rgb_array_list' if RECORD_VIDEO else RENDER_MODE
-env = Environment(gym.make("CarRacing-v2", render_mode=render_mode, continuous=False))
+env = Environment(gym.make("CarRacing-v2", render_mode=render_mode, continuous=True), continuous=True)
 env.env.metadata['render_fps'] = RENDER_FPS
 print(f'\n~~~~~ CAR RACING USING {DEVICE} ~~~~~')
 
 # Initialize Agent
-agt = agent.CarA2CAgentContinous(y_dim=5,n_actions=env.env.action_space.n, dropout_rate=0.1)
+agt = agent.CarA2CAgentContinous(y_dim=5,n_actions=3, dropout_rate=0.1)
 #agt.load_model("./models/0610_0905_CarDQNAgent")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer')
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, multiframe {MULTIFRAME}\n')

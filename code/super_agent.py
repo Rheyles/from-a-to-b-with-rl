@@ -27,9 +27,11 @@ class SuperAgent():
 
         self.memory = ReplayMemory(MEM_SIZE)
 
+        os.makedirs(self.folder(), exist_ok = True)
+
     def folder(self):
         return 'models/' \
-            + str(self.creation_time) \
+            + str(datetime.strftime(self.creation_time, format="%m%d_%H%M")) \
             + str(self.__class__.__name__) + '/'
 
     def select_action(self)-> torch.Tensor:

@@ -429,6 +429,8 @@ class CarA2CAgentContinous(SuperAgent):
              min_lr = 1e-4,
              patience=SCHEDULER_PATIENCE)
         self.reset_patience = 250
+        self.reward_threshold = 50
+        self.max_reward = 0
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
 
@@ -493,11 +495,14 @@ class CarA2CAgentContinous(SuperAgent):
                 # found, so we pick action with the larger expected reward.
 
                 _ , mu, sigma = self.net(state)
-                mu[1:] = (mu[1:]+1)/2
-                sigma[1:] = sigma[1:]/2
+                print('mu')
+                print(mu)
+                print('sigma')
+                print(sigma)
+                sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6]))
                 dist = torch.distributions.Normal(mu, sigma)
                 action = dist.sample()
-                action = torch.clamp(action, self.env.act_space.low, self.env.act_space.high)
+                action = torch.clamp(action, torch.Tensor([-1,0,0]), torch.Tensor([1,1,1]))
 
             self.last_action = action
             return action
@@ -550,19 +555,18 @@ class CarA2CAgentContinous(SuperAgent):
 
 
         y_val_pred, y_pol_mu_pred, y_pol_sigma_pred = self.net(state_batch,action_batch)
+        y_pol_sigma_pred = torch.clamp(y_pol_sigma_pred,torch.Tensor([1e-6,1e-6,1e-6]))
 
         future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
         # rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
             _ , mu, sigma = self.net(non_final_next_states)
-            mu[1:] = (mu[1:]+1)/2
-            sigma[1:] = sigma[1:]/2
+            sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6]))
             dist = torch.distributions.Normal(mu, sigma)
             next_actions = dist.sample()
-            next_actions = torch.clamp(next_actions, self.env.act_space.low, self.env.act_space.high)
-            next_actions = next_actions.max(1).indices
-            future_state_values[non_final_mask], _ = self.net(non_final_next_states, next_actions.unsqueeze(-1))
+            next_actions = torch.clamp(next_actions, torch.Tensor([-1,0,0]), torch.Tensor([1,1,1]))
+            future_state_values[non_final_mask], _ ,_= self.net(non_final_next_states, next_actions)
         y_val_true = reward_batch + GAMMA * future_state_values
 
         adv = y_val_true - y_val_pred
@@ -580,7 +584,22 @@ class CarA2CAgentContinous(SuperAgent):
 
         self.optimizer.zero_grad()
         loss.backward()
+        # In-place gradient clipping
+        torch.nn.utils.clip_grad_value_(self.net.parameters(), 100)
         self.optimizer.step()
+
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        # print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s}  |" \
+        #     + f" {'ε':7s}    | {'η':8s} | {'Rwd/ep':7s}")
+        # print(f" 🏎️  🏎️  || " \
+        #     + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+        #     + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+        #     + f'{self.losses[-1]:.2e} |'\
+        #     + f' {lr:.2e} | {rwd_ep:7.2f}')
+
+        # print("\033[F"*2, end='')
 
         return self.losses
 
@@ -610,3 +629,33 @@ class CarA2CAgentContinous(SuperAgent):
                 strategy (_type_, optional): _description_. Defaults to NETWORK_REFRESH_STRATEGY.
             """
             pass
+
+    def logging(self):
+        """Logs some statistics on the agent running as a function of time
+        in a .csv file"""
+
+        if not os.path.exists(self.folder() + 'log.csv'):
+            with open(self.folder() + 'log.csv', 'w') as log_file:
+                log_file.write('Time,Step,Episode,Loss,Reward,Eta,Action0,Action1,Action2\n')
+
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        self.log_buffer.append([self.time,
+                                     self.steps_done,
+                                     self.episode,
+                                     self.losses[-1],
+                                     self.rewards[-1],
+                                     lr,
+                                     self.last_action.tolist()[0][0],
+                                     self.last_action.tolist()[0][1],
+                                     self.last_action.tolist()[0][2]])
+
+        if self.steps_done % LOG_EVERY == 0:
+            array_test = np.vstack(self.log_buffer)
+            self.log_buffer = []
+
+            with open(self.folder() + 'log.csv', 'a') as myfile:
+                np.savetxt(myfile, array_test, delimiter=',',
+                           fmt=["%7.2f", "%6d", "%4d",
+                                "%5.3e", "%5.3e", "%5.3e",
+                                "%5.3f", "%5.3f", "%5.3f"])

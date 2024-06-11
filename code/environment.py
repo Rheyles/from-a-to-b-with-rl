@@ -1,12 +1,14 @@
 import gymnasium as gym
 from itertools import count
+import numpy as np
 import torch
 from params import DEVICE, MULTIFRAME, NETWORK_REFRESH_STRATEGY
 from gymnasium.utils.save_video import save_video # type: ignore
 
 class Environment():
-    def __init__(self, env_gym: gym.Env) -> None:
+    def __init__(self, env_gym: gym.Env, continuous:bool = False) -> None:
         self.env = env_gym
+        self.continuous = continuous
 
     def run_episode(self, agent) -> int:
         """
@@ -24,7 +26,14 @@ class Environment():
 
         for t in count():
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
-            observation, reward, terminated, truncated, _ = self.env.step(action.item())
+            if self.continuous :
+                # print(action)
+                action_list = action.tolist()[0]
+                for i in range(3):
+                    action_list[i] = np.float32(action_list[i])
+                observation, reward, terminated, truncated, _ = self.env.step(action_list)
+            else :
+                observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
             done = terminated or truncated
 
@@ -70,7 +79,10 @@ class Environment():
 
             state = torch.cat(batch, -1).to(DEVICE) #Transforms batch into right format
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
-            observation, reward, terminated, truncated, _ = self.env.step(action.item())
+            if self.continuous :
+                observation, reward, terminated, truncated, _ = self.env.step(action)
+            else :
+                observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)
             done = terminated or truncated
 

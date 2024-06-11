@@ -162,6 +162,7 @@ class ConvA2CContinuous(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
+
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=5, stride=1),
             nn.ReLU(),
@@ -193,7 +194,7 @@ class ConvA2CContinuous(nn.Module):
         )
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 9249, out_features = 300),
+            nn.Linear(in_features = 131, out_features = 300),
             nn.ReLU(inplace = True),
             nn.Linear(in_features = 300, out_features = 1)
         )
