@@ -102,6 +102,27 @@ class Environment():
             if terminated or truncated or reset: break
 
         return t
+    
+    def save_trigger(self, episode:int, agent:SuperAgent) -> bool:
+        '''A helper function that takes an episode and
+        returns whether we need to save a video or not. It will
+        work in a similar fashion as the save_model() function 
+        
+        args
+            episode : the episode No : will save every time it is reached 
+                regardless of the result
+            agent : needed to check if the episode rewards are through
+                the roof to save
+        '''
+
+        new_best_score = True
+        agent.episode
+        if agent.episode > 0:
+            new_best_score = agent.episode_rewards[-1] \
+                > max(agent.episode_rewards[:-1]) + agent.reward_threshold
+        save_anyway = episode % SAVE_EVERY == 0
+        return new_best_score or save_anyway
+    
 
     def recording(self, agent:SuperAgent):
         '''A function that records the video of the agent throughout
@@ -115,23 +136,14 @@ class Environment():
             None (but saves a video)
             '''
 
-        def episode_trigger(episode):
-            '''A helper function that takes an episode and
-            returns whether we need to save a video or not. It will
-            work in a similar fashion as the save_model() function '''
-            new_best_score = True
-            if agent.episode > 0:
-                new_best_score = agent.episode_rewards[-1] \
-                    > max(agent.episode_rewards[:-1]) + agent.reward_threshold
-            save_anyway = episode % SAVE_EVERY == 0
-            return new_best_score or save_anyway
-
         save_video(
             frames = self.env.render(),
             video_folder=agent.folder(),
-            episode_trigger = episode_trigger,
+            episode_trigger = lambda ep : True,
             fps=30,
             name_prefix='recording',
             step_starting_index=0,
             episode_index=agent.episode,
         )
+
+    
