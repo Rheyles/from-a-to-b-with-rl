@@ -29,7 +29,7 @@ class SuperAgent():
 
     def folder(self):
         return 'models/' \
-            + self.creation_time \
+            + str(self.creation_time) \
             + str(self.__class__.__name__) + '/'
 
     def select_action(self)-> torch.Tensor:
@@ -71,7 +71,7 @@ class DQNAgent(SuperAgent):
              min_lr = MIN_LR,
              patience=SCHEDULER_PATIENCE)
 
-        os.makedirs(self.folder, exist_ok=True)
+        os.makedirs(self.folder(), exist_ok=True)
 
     def update_memory(self, state, action, next_state, reward) -> None:
         self.memory.push(state, action, next_state, reward)
@@ -113,13 +113,13 @@ class DQNAgent(SuperAgent):
         if add_episode:
             episode_str = f'_{self.episode:05d}'
 
-        os.makedirs(self.folder, exist_ok=True)
+        os.makedirs(self.folder(), exist_ok=True)
         torch.save(self.policy_net.state_dict(),
-                   f'{self.folder}/policy{episode_str}.model')
+                   f'{self.folder()}/policy{episode_str}.model')
         torch.save(self.target_net.state_dict(),
-                   f'{self.folder}/target{episode_str}.model')
+                   f'{self.folder()}/target{episode_str}.model')
 
-        with open(self.folder + '/params.json', 'w') as my_file:
+        with open(self.folder() + '/params.json', 'w') as my_file:
             import params as prm
             my_dict = prm.__dict__
             my_dict['DEVICE'] = DEVICE.__str__()
@@ -151,8 +151,8 @@ class DQNAgent(SuperAgent):
         """Logs some statistics on the agent running as a function of time
         in a .csv file"""
 
-        if not os.path.exists(self.folder + 'log.csv'):
-            with open(self.folder + 'log.csv', 'w') as log_file:
+        if not os.path.exists(self.folder() + 'log.csv'):
+            with open(self.folder() + 'log.csv', 'w') as log_file:
                 log_file.write('Time,Step,Episode,Loss,Reward,Eta,Epsilon,Action\n')
 
         lr = self.scheduler.optimizer.param_groups[0]['lr']
@@ -170,7 +170,7 @@ class DQNAgent(SuperAgent):
             array_test = np.vstack(self.log_buffer)
             self.log_buffer = []
 
-            with open(self.folder + 'log.csv', 'a') as myfile:
+            with open(self.folder() + 'log.csv', 'a') as myfile:
                 np.savetxt(myfile, array_test, delimiter=',',
                            fmt=["%7.2f", "%6d", "%4d",
                                 "%5.3e", "%5.3e", "%5.3e",

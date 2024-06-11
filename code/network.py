@@ -195,8 +195,7 @@ class ConvA2CContinuous(nn.Module):
         self.critic = nn.Sequential(
             nn.Linear(in_features = 9249, out_features = 300),
             nn.ReLU(inplace = True),
-            nn.Linear(in_features = 300, out_features = 1),
-            nn.Tanh()
+            nn.Linear(in_features = 300, out_features = 1)
         )
 
     def forward(self, state, action = None):

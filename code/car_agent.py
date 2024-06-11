@@ -551,23 +551,27 @@ class CarA2CAgentContinous(SuperAgent):
         reward_batch = torch.cat(batch.reward)
 
 
-        y_val_pred, y_pol_pred = self.net(state_batch,action_batch)
+        y_val_pred, y_pol_mu_pred, y_pol_sigma_pred = self.net(state_batch,action_batch)
 
-        future_state_values = torch.zeros((BATCH_SIZE,5), dtype=torch.float32, device = DEVICE)
-        rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
+        future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
+        # rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
-            _, next_actions = self.net(non_final_next_states)
+            _, next_actions = self.net(non_final_next_states) # TODO Sample Actions
             next_actions = next_actions.max(1).indices
-            future_state_values[non_final_mask,:], _ = self.net(non_final_next_states, next_actions.unsqueeze(-1))
-        y_val_true = rewards_tensor + GAMMA * future_state_values
+            future_state_values[non_final_mask], _ = self.net(non_final_next_states, next_actions.unsqueeze(-1))
+        y_val_true = reward_batch + GAMMA * future_state_values
 
         adv = y_val_true - y_val_pred
         val_loss = 0.5 * torch.square(adv)
 
-        pol_loss = - (adv * torch.log(y_pol_pred+1e-6))
+        dist = torch.distributions.Normal(y_pol_mu_pred, y_pol_sigma_pred)
+        log_probs = dist.log_prob(action_batch).sum(axis=1)
+        pol_loss = -(log_probs * adv)
 
-        loss = (val_loss+pol_loss).mean()
+        # Entropy loss
+        entropy = dist.entropy().sum(axis=1)
+        loss = (pol_loss + val_loss - BETA * entropy).mean()
         # print(loss.item())
         self.losses.append(float(loss))
 
