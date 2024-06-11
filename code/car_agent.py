@@ -555,7 +555,12 @@ class CarA2CAgentContinous(SuperAgent):
         # rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
-            _, next_actions = self.net(non_final_next_states) # TODO Sample Actions
+            _ , mu, sigma = self.net(non_final_next_states)
+            mu[1:] = (mu[1:]+1)/2
+            sigma[1:] = sigma[1:]/2
+            dist = torch.distributions.Normal(mu, sigma)
+            next_actions = dist.sample()
+            next_actions = torch.clamp(next_actions, self.env.act_space.low, self.env.act_space.high)
             next_actions = next_actions.max(1).indices
             future_state_values[non_final_mask], _ = self.net(non_final_next_states, next_actions.unsqueeze(-1))
         y_val_true = reward_batch + GAMMA * future_state_values

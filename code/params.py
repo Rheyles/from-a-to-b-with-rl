@@ -54,3 +54,8 @@ MULTIFRAME = 1
 # Patience of the scheduler that decrease the learning rate in the car race env
 SCHEDULER_FACTOR = 0.7
 SCHEDULER_PATIENCE = 500
+
+
+# CONTINUOUS MODEL PARAMETERS
+# Beta is the entropy coefficient
+BETA = 1e-4
