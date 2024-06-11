@@ -477,29 +477,27 @@ class CarA2CAgentContinous(SuperAgent):
             act ActType : Action that the self performs
         """
         state = self.prepro(state)
-        sample = random.random()
-        self.epsilon = EPS_END + (EPS_START - EPS_END) * \
-            np.exp(-self.steps_done / EPS_DECAY)
+        #sample = random.random()
+        #self.epsilon = EPS_END + (EPS_START - EPS_END) * \
+            #np.exp(-self.steps_done / EPS_DECAY)
         self.time = (datetime.now() - self.creation_time).total_seconds()
 
         if self.steps_done % IDLENESS == 0:
             self.steps_done+=1 #Update the number of steps within one episode
             self.episode_duration[-1]+=1 #Update the duration of the current episode
-            if sample > self.epsilon or not self.exploration:
-                with torch.no_grad():
-                    # torch.no_grad() used when inference on the model is done
-                    # t.max(1) will return the largest column value of each row.
-                    # second column on max result is index of where max element was
-                    # found, so we pick action with the larger expected reward.
+            # if sample > self.epsilon or not self.exploration:
+            with torch.no_grad():
+                # torch.no_grad() used when inference on the model is done
+                # t.max(1) will return the largest column value of each row.
+                # second column on max result is index of where max element was
+                # found, so we pick action with the larger expected reward.
 
-                    _ , result = self.net(state)
-                    action = result.max(1).indices.view(1, 1)
-            else:
-                # If action is selected at random, give a bit of extra weight
-                # on hitting the gas
-                choice = np.random.choice(flatdim(act_space), p=[0.1, 0.2, 0.2, 0.3, 0.2])
-                action = torch.tensor([[choice]], device = DEVICE, dtype=torch.long)
-
+                _ , mu, sigma = self.net(state)
+                mu[1:] = (mu[1:]+1)/2
+                sigma[1:] = sigma[1:]/2
+                dist = torch.distributions.Normal(mu, sigma)
+                action = dist.sample()
+                action = torch.clamp(action, self.env.act_space.low, self.env.act_space.high)
 
             self.last_action = action
             return action
