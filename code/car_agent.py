@@ -12,7 +12,7 @@ from gymnasium.spaces.utils import flatdim
 
 from params import *
 from super_agent import DQNAgent, SuperAgent
-from network import ConvDQN, ConvA2CDiscrete, ConvA2CContinuous
+from network import ConvDQN, ConvA2CDiscrete, ConvA2CContinuousActor, ConvA2CContinuousCritic
 from buffer import Transition
 from display import Plotter, dqn_diagnostics
 
@@ -420,10 +420,12 @@ class CarA2CAgentContinous(SuperAgent):
         super().__init__(**kwargs)
 
         self.n_actions = kwargs.get("n_actions", 3)
-        self.net = ConvA2CContinuous(self.n_actions)
-        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=INI_LR)
+        self.actor_net = ConvA2CContinuousActor(self.n_actions)
+        self.critic_net = ConvA2CContinuousCritic()
+        self.optimizer_actor = torch.optim.AdamW(self.actor_net.parameters(), lr=INI_LR)
+        self.optimizer_critic = torch.optim.AdamW(self.critic_net.parameters(), lr=INI_LR)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
-            (optimizer=self.optimizer,
+            (optimizer=self.optimizer_actor,
              mode='max',
              factor=0.5,
              min_lr = 1e-4,
@@ -441,7 +443,7 @@ class CarA2CAgentContinous(SuperAgent):
         crop_w = int(state.shape[2] * 0.07)
         state = state[:, :crop_height, crop_w:-crop_w, :]
         g = state[:, :, :, 1::3]
-        gray = (g // 16) / 16
+        gray = (g  / 255)
         gray = torch.moveaxis(gray, -1, 1)
 
         # print(gray.shape)
@@ -494,11 +496,13 @@ class CarA2CAgentContinous(SuperAgent):
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
 
-                _ , mu, sigma = self.net(state)
-                print('mu')
+                mu, sigma = self.actor_net(state)
+
+                print('\n Choosing action \n')
                 print(mu)
-                print('sigma')
                 print(sigma)
+                print('\n\n')
+
                 sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6]))
                 dist = torch.distributions.Normal(mu, sigma)
                 action = dist.sample()
@@ -513,6 +517,88 @@ class CarA2CAgentContinous(SuperAgent):
 
 
     def optimize_model(self) -> list:
+        """
+
+        This function runs the optimization of the model:
+        it takes a batch from the buffer, creates the non final mask and computes:
+        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
+        returns the computed loss
+
+        Args:
+            device (_type_, optional): Device to run computations on. Defaults to DEVICE.
+
+        Returns:
+            losses (list): Calculated Loss
+        """
+        if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
+            return
+
+        if self.episode_duration[-1] < 50: # On ne s'entraîne pas pendant le zoom de début d'épisode
+            return None
+
+        if len(self.memory) < BATCH_SIZE: return 0
+
+        transitions = self.memory.sample(BATCH_SIZE)
+
+        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+        # detailed explanation). This converts batch-array of Transitions
+        # to Transition of batch-arrays.
+
+        batch = Transition(*zip(*transitions)) # Needs to pass this from buffer class
+
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.action)
+        reward_batch = torch.cat(batch.reward)
+
+        mu_v, var_v = self.actor_net(state_batch)
+        var_v = torch.clamp(var_v,torch.Tensor([1e-6,1e-6,1e-6]))
+
+        value_v = self.critic_net(state_batch)
+
+        loss_value_v = nn.functional.mse_loss(value_v.squeeze(-1), reward_batch)
+
+        adv_v = reward_batch.unsqueeze(dim=-1) - value_v.detach()
+
+        p1 = - (mu_v - action_batch).pow(2) / (2 * var_v)
+        p2 = - torch.log(torch.square(2 * var_v * np.pi))
+
+
+        log_prob_v = adv_v * (p1 + p2)
+        loss_policy_v = -log_prob_v.mean()
+        entropy_loss_v = ENTROPY_BETA * (-(torch.log(2*np.pi*var_v) + 1)/2).mean()
+
+        loss_v = loss_policy_v + entropy_loss_v + loss_value_v
+
+        self.optimizer_actor.zero_grad()
+        self.optimizer_critic.zero_grad()
+        loss_v.backward()
+
+        torch.nn.utils.clip_grad_value_(list(self.actor_net.parameters()) + \
+                                        list(self.critic_net.parameters()), 100)
+
+        self.optimizer_actor.step()
+        self.optimizer_critic.step()
+
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        # print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s}  |" \
+        #     + f" {'ε':7s}    | {'η':8s} | {'Rwd/ep':7s}")
+        # print(f" 🏎️  🏎️  || " \
+        #     + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+        #     + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+        #     + f'{self.losses[-1]:.2e} |'\
+        #     + f' {lr:.2e} | {rwd_ep:7.2f}')
+
+        # print("\033[F"*2, end='')
+
+        return self.losses
+
+
+    def old_optimize_model(self) -> list:
         """
 
         This function runs the optimization of the model:
@@ -553,20 +639,20 @@ class CarA2CAgentContinous(SuperAgent):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-
-        y_val_pred, y_pol_mu_pred, y_pol_sigma_pred = self.net(state_batch,action_batch)
+        y_val_pred = self.critic_net(state_batch)
+        y_pol_mu_pred, y_pol_sigma_pred = self.actor_net(state_batch)
         y_pol_sigma_pred = torch.clamp(y_pol_sigma_pred,torch.Tensor([1e-6,1e-6,1e-6]))
 
         future_state_values = torch.zeros((BATCH_SIZE,1), dtype=torch.float32, device = DEVICE)
         # rewards_tensor = torch.tile(reward_batch, (5,1)).T.to(DEVICE)
 
         with torch.no_grad():
-            _ , mu, sigma = self.net(non_final_next_states)
+            mu, sigma = self.actor_net(non_final_next_states)
             sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6]))
             dist = torch.distributions.Normal(mu, sigma)
             next_actions = dist.sample()
             next_actions = torch.clamp(next_actions, torch.Tensor([-1,0,0]), torch.Tensor([1,1,1]))
-            future_state_values[non_final_mask], _ ,_= self.net(non_final_next_states, next_actions)
+            future_state_values[non_final_mask] = self.critic_net(non_final_next_states)
         y_val_true = reward_batch + GAMMA * future_state_values
 
         adv = y_val_true - y_val_pred
@@ -576,17 +662,48 @@ class CarA2CAgentContinous(SuperAgent):
         log_probs = dist.log_prob(action_batch).sum(axis=1)
         pol_loss = -(log_probs * adv)
 
+        p1 = - (y_pol_mu_pred - action_batch).pow(2) / (2 * y_pol_sigma_pred)
+        # print('p1')
+        # print(p1)
+
+        p2 = - torch.log(torch.square(2 * y_pol_sigma_pred * np.pi))
+        # print('p2')
+        # print(p2)
+
+        pol_loss = (p1 + p2)
+
+
         # Entropy loss
+        # print(log_probs)
+        # print(action_batch)
+        # print(log_probs)
+        # print(y_pol_mu_pred)
+        # print(y_pol_sigma_pred)
+        # print('\n\n')
         entropy = dist.entropy().sum(axis=1)
+        # print("pol_loss")
+        # print(pol_loss.mean())
+        # print("val_loss")
+        # print(val_loss.mean())
         loss = (pol_loss + val_loss - BETA * entropy).mean()
+        # print('loss')
+        # print(loss)
         # print(loss.item())
         self.losses.append(float(loss))
 
-        self.optimizer.zero_grad()
-        loss.backward()
+        # if self.steps_done > 10:
+        #     exit()
+
+        self.optimizer_actor.zero_grad()
+        self.optimizer_critic.zero_grad()
+        val_loss.mean().backward(retain_graph=False)
+        pol_loss.mean().backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.net.parameters(), 100)
-        self.optimizer.step()
+        torch.nn.utils.clip_grad_value_(list(self.actor_net.parameters()) + \
+                                        list(self.critic_net.parameters()), 100)
+
+        self.optimizer_critic.step()
+        self.optimizer_actor.step()
 
         rwd_ep = self.episode_rewards[-1]
         lr = self.scheduler.optimizer.param_groups[0]['lr']

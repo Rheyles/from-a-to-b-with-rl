@@ -17,10 +17,10 @@ LOG_EVERY = 500 # Log info every XXX steps
 RECORD_VIDEO = False
 
 # MEM_SIZE is the size of the ReplayMemory buffer
-MEM_SIZE = 10000
+MEM_SIZE = 1000
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 
 # GAMMA is the discount factor of long-term reward
 GAMMA = 0.8
@@ -58,4 +58,4 @@ SCHEDULER_PATIENCE = 500
 
 # CONTINUOUS MODEL PARAMETERS
 # Beta is the entropy coefficient
-BETA = 3e-3
+ENTROPY_BETA = 1e-3
