@@ -18,7 +18,7 @@ networks = {'ConvDQN3layersSmall':ConvDQN3layersSmall,
             'ConvDQN2layersClassic':ConvDQN2layersClassic,
             'ConvDQN2layersBrice':ConvDQN2layersBrice,
             'ConvDQN2layersBriceNoCrop':ConvDQN2layersBriceNoCrop,
-            'ConvA2C':ConvA2CBrice
+            'ConvA2CBrice':ConvA2CBrice
               }
 
 class CarDQNAgent(DQNAgent):
@@ -282,7 +282,7 @@ class CarA2CAgent(SuperAgent):
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             _ , probs = self.net(state)
-            probs = probs.detach().numpy().T.squeeze(-1)
+            probs = probs.to('cpu').detach().numpy().T.squeeze(-1)
             action = torch.tensor(np.random.choice(flatdim(act_space), p= probs))
         self.last_action = action
         print(" 🏎️  🏎️  || Idle | Left | Right | Gas | Break")
