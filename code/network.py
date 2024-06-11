@@ -25,9 +25,9 @@ class LinearA2CActor(nn.Module):
 
         super().__init__(*args, **kwargs)
         self.actor = nn.Sequential(
-            nn.Linear(n_observations, 64), nn.ReLU(inplace = True),
-            nn.Linear(64,64), nn.ReLU(inplace = True),
-            nn.Linear(64, n_actions),
+            nn.Linear(n_observations, 32), nn.ReLU(),
+            nn.Linear(32,32), nn.ReLU(),
+            nn.Linear(32, n_actions),
             nn.Softmax(dim=1)
         )
 
@@ -41,14 +41,15 @@ class LinearA2CCritic(nn.Module):
         super().__init__(*args, **kwargs)
 
         self.critic = nn.Sequential(
-            nn.Linear(n_observations+1, out_features = 64), #Added the +1 to account for the action
-            nn.ReLU(inplace = True),
-            nn.Linear(64,64), nn.ReLU(inplace = True),
-            nn.Linear(in_features = 64, out_features = 1)
+            nn.Linear(n_observations, out_features = 32), #Added the +1 to account for the action
+            nn.ReLU(),
+            nn.Linear(32,32), nn.ReLU(),
+            nn.Linear(in_features = 32, out_features = 1)
             )
 
-    def forward(self, state, action):
-        y_val = self.critic(torch.concat((state,action), dim = 1))
+    def forward(self, state,): #action): #Try an implementation witout the action for the critic
+        y_val = self.critic(state)
+        #y_val = self.critic(torch.concat((state), dim = 1))
         return y_val
 
 
@@ -215,50 +216,38 @@ class ConvDQN3layersClassic(nn.Module):
             nn.Linear(6272, n_actions, bias=True))
 
 
-class ConvA2C(nn.Module):
+class ConvA2CBrice(nn.Module):
+
     def __init__(self, n_actions, dropout_rate=0.0):
-        super(ConvA2C, self).__init__()
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=9, stride=1),
+        super().__init__()
+        self.convnet = nn.Sequential(
+            nn.Conv2d(MULTIFRAME, 16, kernel_size=7, stride=3,),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=dropout_rate))
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(32, 32, kernel_size=5, stride=1),
+            nn.Dropout(p=dropout_rate),
+            nn.Conv2d(16, 32, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(p=dropout_rate))
-
-        # self.conv3 = nn.Sequential(
-        #     nn.Conv2d(64, 128, kernel_size=3, stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=2, stride=2),
-        #     nn.Dropout(p=dropout_rate))
-
-
-        self.conv_net  = nn.Sequential(self.conv1,
-                                       self.conv2,
-                                       nn.Flatten())
-
-
-        self.actor = nn.Sequential(
-            nn.Linear(9248, 300), nn.ReLU(inplace = True),
-            nn.Linear(300, n_actions),
-            nn.Softmax(),
+            nn.Dropout(p=dropout_rate),
+            nn.Flatten()
         )
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 9249, out_features = 300),
-            nn.ReLU(inplace = True),
-            nn.Linear(in_features = 300, out_features = 1),
-            nn.Tanh()
+            nn.Linear(800, out_features = 64), #Added the +1 to account for the action
+            nn.ReLU(),
+            nn.Linear(64,64), nn.ReLU(),
+            nn.Linear(in_features = 64, out_features = 1)
+            )
+
+        self.actor = nn.Sequential(
+            nn.Linear(800, 64), nn.ReLU(),
+            nn.Linear(64,64), nn.ReLU(),
+            nn.Linear(64, n_actions),
+            nn.Softmax(dim=1)
         )
 
-    def forward(self, state, action = None):
-
-        out = self.conv_net(state)
+    def forward(self, x):
+        out = self.convnet(x)
+        y_val = self.critic(out)
         y_pol = self.actor(out)
-        if action is None:
-            return None, y_pol
-        y_val = self.critic(torch.concat((out,action), dim = 1))
         return y_val, y_pol

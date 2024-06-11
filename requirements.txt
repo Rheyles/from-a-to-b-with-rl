@@ -6,6 +6,6 @@ pygame
 moviepy
 matplotlib
 swig
-wheel setuptools
-box2d pygame
-box2d box2d-kengz
+# wheel setuptools
+# box2d pygame
+# box2d box2d-kengz
