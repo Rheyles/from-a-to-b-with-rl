@@ -12,7 +12,10 @@ print(f'\n~~~~~ CAR RACING USING {DEVICE} ~~~~~')
 print(f'Saving video : {RECORD_VIDEO}, saving models/video every {SAVE_EVERY}')
 
 # Initialize Agent
-agt = agent.CarA2CAgent(env.env.action_space.n, dropout_rate=DROPOUT_RATE, network=NETWORK)
+agt = agent.CarDQNAgent(env.env.action_space.n,
+                        dropout_rate=DROPOUT_RATE,
+                        network=NETWORK,
+                        crop_image=False)
 # agt.load_model("./models/0610_0002_CarDQNAgent")
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, {MULTIFRAME} multiframe , {IDLENESS} idleness')
 print(f'Optimizer : {OPTIMIZER} optimizer, {LOSS} loss, {REGULARIZATION} L2 regularization coeff.')

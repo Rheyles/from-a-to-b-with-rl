@@ -17,6 +17,7 @@ networks = {'ConvDQN3layersSmall':ConvDQN3layersSmall,
             'ConvDQN2layersSmall':ConvDQN2layersSmall,
             'ConvDQN2layersClassic':ConvDQN2layersClassic,
             'ConvDQN2layersBrice':ConvDQN2layersBrice,
+            'ConvDQN2layersBriceNoCrop':ConvDQN2layersBriceNoCrop,
             'ConvA2C':ConvA2CBrice
               }
 
@@ -80,7 +81,7 @@ class CarDQNAgent(DQNAgent):
         if self.crop_image:
             crop_height = int(state.shape[1] * 0.88)
             crop_w = int(state.shape[2] * 0.07)
-        state = state[:, :crop_height, crop_w:-crop_w, :]
+            state = state[:, :crop_height, crop_w:-crop_w, :]
 
         return state.moveaxis(-1, 1)
 

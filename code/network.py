@@ -132,6 +132,34 @@ class ConvDQN2layersBrice(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
+class ConvDQN2layersBriceNoCrop(nn.Module):
+    """The NoCrop version of Brice's CNN for CarRace.
+    I have to do this to make sure I retrieve my networks later, and the
+    different image size means I have 1152 nodes instead of 800 after the flatten.
+    This one seems to work quite alright, for reasons that are a bit uncertain
+    Freely adapted from https://github.com/wiitt/DQN-Car-Racing """
+    def __init__(self, n_actions, dropout_rate=0.0):
+        super(ConvDQN2layersBriceNoCrop, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(MULTIFRAME, 16, kernel_size=7, stride=3,),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate),
+            nn.Conv2d(16, 32, kernel_size=4, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout_rate),
+            nn.Flatten(),
+            nn.Linear(1152, 64),
+            nn.ReLU(),
+            nn.Linear(64, n_actions)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
 class ConvDQN3layersSmall(nn.Module):
     """A 'small' version of the three-layer CNN model that we used
     in week 1 of the project. Not tested """
