@@ -27,8 +27,8 @@ class Environment():
         for t in count():
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
             if self.continuous:
-                # print(action)
-                observation, reward, terminated, truncated, _ = self.env.step(np.array(action)[0])
+                action_list = [np.array(action)[0][0] - np.array(action)[0][1], np.array(action)[0][2], np.array(action)[0][3]]
+                observation, reward, terminated, truncated, _ = self.env.step(action_list)
             else :
                 observation, reward, terminated, truncated, _ = self.env.step(action.item())
             reward = torch.tensor([reward], device=DEVICE)

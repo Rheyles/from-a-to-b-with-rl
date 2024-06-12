@@ -5,7 +5,7 @@ import frozen_agent as agent
 from params import *
 
 # Initialize Environment
-env = Environment(gym.make("FrozenLake-v1" , map_name='8x8',render_mode='human', is_slippery=False))
+env = Environment(gym.make("FrozenLake-v1" , map_name='4x4',render_mode='human', is_slippery=False))
 env.env.metadata['render_fps'] = RENDER_FPS
 print(f'\n~~~~~ FROZEN LAKE USING {DEVICE} ~~~~~')
 

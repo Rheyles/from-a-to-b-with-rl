@@ -184,7 +184,7 @@ class ConvA2CContinuousActor(nn.Module):
         self.actor_mu = nn.Sequential(
             nn.Linear(128, 300), nn.ReLU(),
             nn.Linear(300, n_actions),
-            nn.Tanh()
+            nn.Softmax()
         )
 
         self.actor_sigma = nn.Sequential(
@@ -197,7 +197,7 @@ class ConvA2CContinuousActor(nn.Module):
 
         out = self.conv_net(state)
         y_pol_mu = self.actor_mu(out)
-        y_pol_sigma = self.actor_sigma(out)
+        y_pol_sigma = self.actor_sigma(out) * 0.9 + 0.1
         return y_pol_mu, y_pol_sigma
 
 
@@ -229,13 +229,13 @@ class ConvA2CContinuousCritic(nn.Module):
                                        nn.Flatten())
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 128, out_features = 300),
+            nn.Linear(in_features = 132, out_features = 300),
             nn.ReLU(inplace = False),
             nn.Linear(in_features = 300, out_features = 1)
         )
 
-    def forward(self, state):
+    def forward(self, state, action):
 
         out = self.conv_net(state)
-        y_val = self.critic(out)
+        y_val = self.critic(torch.concat((out,action), dim = 1))
         return y_val

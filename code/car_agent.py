@@ -419,9 +419,9 @@ class CarA2CAgentContinous(SuperAgent):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        self.n_actions = kwargs.get("n_actions", 3)
-        self.actor_net = ConvA2CContinuousActor(self.n_actions)
-        self.critic_net = ConvA2CContinuousCritic()
+        self.n_actions = kwargs.get("n_actions", 4)
+        self.actor_net = ConvA2CContinuousActor(self.n_actions).to(DEVICE)
+        self.critic_net = ConvA2CContinuousCritic().to(DEVICE)
         self.optimizer_actor = torch.optim.AdamW(self.actor_net.parameters(), lr=INI_LR)
         self.optimizer_critic = torch.optim.AdamW(self.critic_net.parameters(), lr=INI_LR)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
@@ -496,17 +496,17 @@ class CarA2CAgentContinous(SuperAgent):
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
 
-                mu, sigma = self.actor_net(state)
+                mu, sigma = self.actor_net(state.to(DEVICE))
 
                 print('\n Choosing action \n')
                 print(mu)
                 print(sigma)
                 print('\n\n')
 
-                sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6]))
+                sigma = torch.clamp(sigma,torch.Tensor([1e-6,1e-6,1e-6,1e-6]).to(DEVICE))
                 dist = torch.distributions.Normal(mu, sigma)
                 action = dist.sample()
-                action = torch.clamp(action, torch.Tensor([-1,0,0]), torch.Tensor([1,1,1]))
+                action = torch.clamp(action, torch.Tensor([0,0,0,0]).to(DEVICE), torch.Tensor([1,1,1,1]).to(DEVICE))
 
             self.last_action = action
             return action
@@ -554,9 +554,9 @@ class CarA2CAgentContinous(SuperAgent):
         reward_batch = torch.cat(batch.reward)
 
         mu_v, var_v = self.actor_net(state_batch)
-        var_v = torch.clamp(var_v,torch.Tensor([1e-6,1e-6,1e-6]))
+        var_v = torch.clamp(var_v,torch.Tensor([1e-6,1e-6,1e-6,1e-6]).to(DEVICE))
 
-        value_v = self.critic_net(state_batch)
+        value_v = self.critic_net(state_batch, action_batch)
 
         loss_value_v = nn.functional.mse_loss(value_v.squeeze(-1), reward_batch)
 

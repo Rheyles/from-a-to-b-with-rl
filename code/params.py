@@ -17,10 +17,10 @@ LOG_EVERY = 500 # Log info every XXX steps
 RECORD_VIDEO = False
 
 # MEM_SIZE is the size of the ReplayMemory buffer
-MEM_SIZE = 1000
+MEM_SIZE = 10000
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
 # GAMMA is the discount factor of long-term reward
 GAMMA = 0.8
@@ -42,8 +42,8 @@ TAU = 0.003
 # LR is the learning rate of the optimizer
 LOSS = 'MSE'   # HUBER, MSE, MAE
 OPTIMIZER = 'RMSPROP' # ADAM, RMSPROP, ADAMW
-INI_LR = 5e-4
-MIN_LR = 5e-4
+INI_LR = 1e-3
+MIN_LR = 1e-3
 # IDLENESS is the amount where agent choose the same action
 IDLENESS = 3
 
