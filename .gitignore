@@ -5,3 +5,7 @@
 __pycache__
 models/
 code/params.py
+*.gif
+code/stable_baseline_test.py
+.python-version
+code/PPOmodels

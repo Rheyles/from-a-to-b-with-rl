@@ -54,13 +54,17 @@ class ReplayMemory(object):
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
 
+
         state_batch = torch.cat(batch.state).to(DEVICE)
         action_batch = torch.cat(batch.action).to(DEVICE)
         next_state_batch = torch.cat(batch.next_state).to(DEVICE)
         reward_batch = torch.cat(batch.reward).to(DEVICE)
         not_done_batch = torch.cat(batch.not_done).to(DEVICE)
-        if state_batch.ndim == 1: state_batch = state_batch.unsqueeze(-1)
-        if next_state_batch.ndim == 1: next_state_batch = next_state_batch.unsqueeze(-1)
+        if state_batch.ndim <= 1: state_batch = state_batch.unsqueeze(-1)
+        if next_state_batch.ndim <= 1: next_state_batch = next_state_batch.unsqueeze(-1)
+        if not_done_batch.ndim <= 1: not_done_batch = not_done_batch.unsqueeze(-1)
+
+
 
         return state_batch, action_batch, next_state_batch, reward_batch, not_done_batch
 
@@ -127,8 +131,10 @@ class TorchMemory():
         next_state_batch = batch.get('next_state').squeeze(1).to(DEVICE)
         reward_batch = batch.get('reward').squeeze(1).to(DEVICE)
         not_done_batch = batch.get('not_done').squeeze(1).to(DEVICE)
-        if state_batch.ndim == 1: state_batch = state_batch.unsqueeze(-1)
-        if next_state_batch.ndim == 1: next_state_batch = next_state_batch.unsqueeze(-1)
+        if state_batch.ndim <= 1: state_batch = state_batch.unsqueeze(-1)
+        if next_state_batch.ndim <= 1: next_state_batch = next_state_batch.unsqueeze(-1)
+        if not_done_batch.ndim <= 1: not_done_batch = not_done_batch.unsqueeze(-1)
+        if action_batch.ndim == 0: action_batch = action_batch.unsqueeze(-1)
 
         return state_batch, action_batch, next_state_batch, reward_batch, not_done_batch
 

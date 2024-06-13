@@ -14,7 +14,7 @@ class Environment():
                  lake_penalty = 0) -> None:
         self.env = env_gym
         self.type = env_gym.unwrapped.spec.id
-        self.skip_steps = 50 if 'CarRacing' in self.type else 0
+        self.skip_steps = 0 if 'CarRacing' in self.type else 0
         self.lake_penalty = lake_penalty if 'FrozenLake' in self.type else 0
 
     def run_episode(self, agent:DQNAgent) -> int:
@@ -43,7 +43,7 @@ class Environment():
                 reward += self.lake_penalty
 
             # Store the transition in memory
-            reset = agent.update_memory(state, action, next_state, reward, not_done, skip_steps=self.skip_steps) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
+            reset = agent.update_memory(state, action, next_state, reward, not_done) # NOTE : Skip_steps should be 50 for CAR_RACE, 0 for FROZEN_LAKE
             agent.logging()
 
             # Move to the next state
@@ -102,6 +102,27 @@ class Environment():
             if terminated or truncated or reset: break
 
         return t
+    
+    def save_trigger(self, episode:int, agent:SuperAgent) -> bool:
+        '''A helper function that takes an episode and
+        returns whether we need to save a video or not. It will
+        work in a similar fashion as the save_model() function 
+        
+        args
+            episode : the episode No : will save every time it is reached 
+                regardless of the result
+            agent : needed to check if the episode rewards are through
+                the roof to save
+        '''
+
+        new_best_score = True
+        agent.episode
+        if agent.episode > 0:
+            new_best_score = agent.episode_rewards[-1] \
+                > max(agent.episode_rewards[:-1]) + agent.reward_threshold
+        save_anyway = episode % SAVE_EVERY == 0
+        return new_best_score or save_anyway
+    
 
     def recording(self, agent:SuperAgent):
         '''A function that records the video of the agent throughout
@@ -115,23 +136,14 @@ class Environment():
             None (but saves a video)
             '''
 
-        def episode_trigger(episode):
-            '''A helper function that takes an episode and
-            returns whether we need to save a video or not. It will
-            work in a similar fashion as the save_model() function '''
-            new_best_score = True
-            if agent.episode > 0:
-                new_best_score = agent.episode_rewards[-1] \
-                    > max(agent.episode_rewards[:-1]) + agent.reward_threshold
-            save_anyway = episode % SAVE_EVERY == 0
-            return new_best_score or save_anyway
-
         save_video(
             frames = self.env.render(),
             video_folder=agent.folder(),
-            episode_trigger = episode_trigger,
+            episode_trigger = lambda ep : True,
             fps=30,
             name_prefix='recording',
             step_starting_index=0,
             episode_index=agent.episode,
         )
+
+    
