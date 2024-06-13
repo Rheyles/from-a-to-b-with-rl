@@ -167,7 +167,8 @@ class FrozenDQNAgentBase(DQNAgent):
 class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
     def __init__(self, y_dim:int, **kwargs) -> None:
-        """
+        """ DQN Agent with an enhanced observation map. This agent is sensitive to the type of states around the one
+        he is currently on. Changes only affect the observation shape that is now a 4,1 size tensor rather than a 1,
 
         Args:
             x_dim (int): Size of model input
@@ -183,7 +184,8 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
     def prepare_observation(self, state: torch.Tensor, env_map: np.ndarray) -> torch.Tensor:
         """
-        !!! SPECIFIC TO FROZEN LAKE !!!
+        !!! SPECIFIC TO FROZEN LAKE !!! Method that changes the state of the agent. Observation now contains
+        the type of states around the one that the agent is on.
         Args:
             state (torch.Tensor): number of the tile where the agent stands
             env_map (np.ndarray): map of the environment
@@ -359,6 +361,12 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         return self.losses
 
 class FrozenDoubleDQNAgent(FrozenDQNAgentBase):
+    """Double DQN Agent that uses two NN models to supposedly limit the bias in the DQN agent. (If one is subject to some
+    noise, the other one can limit its effect on the policy). Affects both the select action and optimize model.
+
+    Args:
+        FrozenDQNAgentBase (_type_): _description_
+    """
 
     def __init__(self, y_dim: int, **kwargs) -> None:
         super().__init__(y_dim, **kwargs)
@@ -408,7 +416,7 @@ class FrozenDoubleDQNAgent(FrozenDQNAgentBase):
                     indice = result_indice
                 else :
                     indice = result2_indice
-                return indice
+                return indice # Uses the output of both models
         else:
             return torch.tensor([[act_space.sample()]], device = DEVICE, dtype=torch.long)
 
@@ -539,6 +547,11 @@ class FrozenDoubleDQNAgent(FrozenDQNAgentBase):
             self.targets_net[i].load_state_dict(target_net_state_dict)
 
 class FrozenA2CAgentBase(SuperAgent):
+    """ A2C agent adapted to frozen lake. Uses both the actor and critic networks(separated in two different classes)
+
+    Args:
+        SuperAgent (): OG mother class of an agent
+    """
 
     def __init__(self, y_dim:int, **kwargs) -> None:
         """
@@ -579,8 +592,8 @@ class FrozenA2CAgentBase(SuperAgent):
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
-        Agent selects one of four actions to take either as a prediction of the model or randomly:
-        The chances of picking a random action are high in the beginning and decrease with number of iterations
+        Agent selects one action to take according to the model prediction:
+        The exploration part of this algorythm should be implemented using entropy
 
         Args:
             act_space : Action space of environment
@@ -620,15 +633,15 @@ class FrozenA2CAgentBase(SuperAgent):
         """
 
         This function runs the optimization of the model:
-        it takes a batch from the buffer, creates the non final mask and computes:
-        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
-        returns the computed loss
+        it takes a batch from the buffer
+        Calculates the advantage then the corresponding losses (val_loss/pol_loss) and performs a gradient descent on
+        each one. Returns the calculaetd advantage
 
         Args:
             device (_type_, optional): Device to run computations on. Defaults to DEVICE.
 
         Returns:
-            losses (list): Calculated Loss
+            adv (list): Calculated advantage
         """
         if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
             return
@@ -721,19 +734,21 @@ class FrozenA2CAgentBase(SuperAgent):
         pass
 
     def update_memory(self, state, action, next_state, reward, not_done, skip_steps = 0) -> None:
-
-        # if reward == 1:
+        """defines what to do in general when we update the agent memory. Also defines intermediate rewards that could
+        be applied on the agent to help it converge """
+        # if reward == 1: #Increases the reward associated with a gift to +10
         #     reward += 9
 
-        # if state.item() not in self.already_there:
+        # if state.item() not in self.already_there: # Adds a small reward every time the agent reaches a state for the
+        # first time
         #     self.already_there.append(state.item())
         #     reward +=0.01
-
+        # Adds a reward when the agent reaches positions near the gift
         # # good_cases = [63,62,61,60,55,54,53,52,47,46,45,44,39,38,37,36,35,31,30,29,28]
         # if int(state.item()) > 55:
         #     reward += 0.05
 
-        # if next_state == state:
+        # if next_state == state: # Adds a negative reward every time the agent hits a wall and does not update its position
         #     reward -= 0.01
 
         self.memory.push(state, action.unsqueeze(-1), next_state, reward, not_done)
@@ -741,6 +756,12 @@ class FrozenA2CAgentBase(SuperAgent):
         return None
 
 class FrozenAgentA2CObs(FrozenA2CAgentBase):
+    """ A2C agent that uses A2C networks described in FrozenA2CAgentBase and the change in observation used in FrozenDQNAgentObs
+    Note this agent, retains the state that he is currently on IN ADDITION to the ones around him, state tensor shape is now 5,1
+
+    Args:
+        FrozenA2CAgentBase (_type_): _description_
+    """
 
     def __init__(self, y_dim:int, **kwargs) -> None:
         """
@@ -756,7 +777,7 @@ class FrozenAgentA2CObs(FrozenA2CAgentBase):
 
     def prepare_observation(self, state: torch.Tensor) -> torch.Tensor:
         """
-        !!! SPECIFIC TO FROZEN LAKE !!!
+        !!! SPECIFIC TO FROZEN LAKE !!! Changes state of the agent to include its surrounding
         Args:
             state (torch.Tensor): number of the tile where the agent stands
             env_map (np.ndarray): map of the environment
@@ -778,7 +799,7 @@ class FrozenAgentA2CObs(FrozenA2CAgentBase):
             tile = self.env_map[(state-map_x)//map_x][(state-map_x)%map_x]
         else :
             tile = b''
-        result[0] = TILE_VALUE_ENCODING[tile.decode('UTF-8')]
+        result[0] = TILE_VALUE_ENCODING[tile.decode('UTF-8')] # type of tile in binary?
 
         if state + map_x < map_x * map_y :
             tile = self.env_map[(state+map_x)//map_x][(state+map_x)%map_x]
@@ -804,8 +825,8 @@ class FrozenAgentA2CObs(FrozenA2CAgentBase):
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
-        Agent selects one of four actions to take either as a prediction of the model or randomly:
-        The chances of picking a random action are high in the beginning and decrease with number of iterations
+        Agent selects one action to take according to the model prediction:
+        The exploration part of this algorythm should be implemented using entropy
 
         Args:
             act_space : Action space of environment
@@ -844,9 +865,9 @@ class FrozenAgentA2CObs(FrozenA2CAgentBase):
         """
 
         This function runs the optimization of the model:
-        it takes a batch from the buffer, creates the non final mask and computes:
-        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
-        returns the computed loss
+        it takes a batch from the buffer
+        Calculates the advantage then the corresponding losses (val_loss/pol_loss) and performs a gradient descent on
+        each one. Returns the calculaetd advantage
 
         Args:
             device (_type_, optional): Device to run computations on. Defaults to DEVICE.
@@ -939,20 +960,23 @@ class FrozenAgentA2CObs(FrozenA2CAgentBase):
         pass
 
     def update_memory(self, state, action, next_state, reward, not_done, skip_steps = 0) -> None:
-
-        # if reward == 1:
+        """defines what to do in general when we update the agent memory. Also defines intermediate rewards that could
+        be applied on the agent to help it converge """
+        # if reward == 1: #Increases the reward associated with a gift to +10
         #     reward += 9
 
-        # if state.item() not in self.already_there:
+        # if state.item() not in self.already_there: # Adds a small reward every time the agent reaches a state for the
+        # first time
         #     self.already_there.append(state.item())
         #     reward +=0.01
-
+        # Adds a reward when the agent reaches positions near the gift
         # # good_cases = [63,62,61,60,55,54,53,52,47,46,45,44,39,38,37,36,35,31,30,29,28]
         # if int(state.item()) > 55:
         #     reward += 0.05
 
-        # if next_state == state:
+        # if next_state == state: # Adds a negative reward every time the agent hits a wall and does not update its position
         #     reward -= 0.01
+        
         state = self.prepare_observation(state)
         next_state = self.prepare_observation(next_state)
         self.memory.push(state, action.unsqueeze(-1), next_state, reward, not_done)
