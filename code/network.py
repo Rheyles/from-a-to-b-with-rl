@@ -182,14 +182,14 @@ class ConvA2CContinuousActor(nn.Module):
 
 
         self.actor_mu = nn.Sequential(
-            nn.Linear(128, 300), nn.ReLU(),
-            nn.Linear(300, n_actions),
+            nn.Linear(128, 500), nn.ReLU(),
+            nn.Linear(500, n_actions),
             nn.Softmax()
         )
 
         self.actor_sigma = nn.Sequential(
-            nn.Linear(128, 300), nn.ReLU(),
-            nn.Linear(300, n_actions),
+            nn.Linear(128, 500), nn.ReLU(),
+            nn.Linear(500, n_actions),
             nn.Sigmoid()
         )
 
