@@ -822,6 +822,9 @@ class CarPPOAgentContinous(CarA2CAgentContinous):
 
                 self.last_mu, self.last_sigma = self.actor_net(state.to(DEVICE))
 
+                print("Reward")
+                print(str(self.episode_rewards[-1]) + '\n')
+
                 print('\n Choosing action \n')
                 print(self.last_mu)
                 print(self.last_sigma)
@@ -911,8 +914,8 @@ class CarPPOAgentContinous(CarA2CAgentContinous):
         # loss_v = loss_policy_v + entropy_loss_v + loss_value_v
         loss_v = action_loss + entropy_loss_v + loss_value_v
 
-        print("Loss")
-        print(str(loss_v) + '\n')
+        # print("Loss")
+        # print(str(loss_v) + '\n')
 
         self.optimizer_actor.zero_grad()
         self.optimizer_critic.zero_grad()
@@ -947,9 +950,6 @@ class CarPPOAgentContinous(CarA2CAgentContinous):
 
         state = self.prepro(state)
         next_state = self.prepro(next_state)
-
-        print("Reward")
-        print(str(self.episode_rewards[-1]) + '\n')
 
         if sum(self.rewards[-1*min(self.reset_patience,self.episode_duration[-1]):]) <= (self.reset_patience-1)*-0.1:
             reward[0]=-100
