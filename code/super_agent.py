@@ -52,8 +52,6 @@ class SuperAgent():
         pass
 
 
-
-
 class DQNAgent(SuperAgent):
     '''The DeepQNetwork Agent class.
     Works using :
