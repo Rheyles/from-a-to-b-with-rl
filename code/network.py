@@ -235,13 +235,11 @@ class ConvA2CBrice(nn.Module):
         self.critic = nn.Sequential(
             nn.Linear(800, out_features = 64), #Added the +1 to account for the action
             nn.ReLU(),
-            nn.Linear(64,64), nn.ReLU(),
             nn.Linear(in_features = 64, out_features = 1)
             )
 
         self.actor = nn.Sequential(
             nn.Linear(800, 64), nn.ReLU(),
-            nn.Linear(64,64), nn.ReLU(),
             nn.Linear(64, n_actions),
             nn.Softmax(dim=1)
         )
