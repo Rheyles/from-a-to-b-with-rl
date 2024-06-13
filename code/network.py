@@ -158,13 +158,13 @@ class ConvA2CContinuousActor(nn.Module):
     def __init__(self, n_actions, dropout_rate=0.0):
         super(ConvA2CContinuousActor, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(MULTIFRAME, 32, kernel_size=9, stride=4),
+            nn.Conv2d(MULTIFRAME, 32, kernel_size=7, stride=3),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
 
         self.conv2 = nn.Sequential(
-            nn.Conv2d(32, 32, kernel_size=5, stride=1),
+            nn.Conv2d(32, 32, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
@@ -182,13 +182,13 @@ class ConvA2CContinuousActor(nn.Module):
 
 
         self.actor_mu = nn.Sequential(
-            nn.Linear(128, 500), nn.ReLU(),
+            nn.Linear(800, 500), nn.ReLU(),
             nn.Linear(500, n_actions),
             nn.Softmax()
         )
 
         self.actor_sigma = nn.Sequential(
-            nn.Linear(128, 500), nn.ReLU(),
+            nn.Linear(800, 500), nn.ReLU(),
             nn.Linear(500, n_actions),
             nn.Sigmoid()
         )
@@ -206,13 +206,13 @@ class ConvA2CContinuousCritic(nn.Module):
     def __init__(self, dropout_rate=0.0):
         super(ConvA2CContinuousCritic, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(MULTIFRAME, 32, kernel_size=9, stride=4),
+            nn.Conv2d(MULTIFRAME, 32, kernel_size=7, stride=3),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
 
         self.conv2 = nn.Sequential(
-            nn.Conv2d(32, 32, kernel_size=5, stride=1),
+            nn.Conv2d(32, 32, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=dropout_rate))
@@ -229,7 +229,7 @@ class ConvA2CContinuousCritic(nn.Module):
                                        nn.Flatten())
 
         self.critic = nn.Sequential(
-            nn.Linear(in_features = 132, out_features = 300),
+            nn.Linear(in_features = 804, out_features = 300),
             nn.ReLU(inplace = False),
             nn.Linear(in_features = 300, out_features = 1)
         )
