@@ -197,6 +197,20 @@ class CarDQNAgent(DQNAgent):
         return self.losses
 
 class CarA2CAgent(SuperAgent):
+    """
+    The Car A2C Agent class, deriving from the Super Agent class. We add a
+    few specific things in terms of preprocessing. It is made out of a conv2D network common base
+    feeding an actor and critic Linear neural networks
+
+    ARGS :
+        y_dim : it should correspond to the action space (N actions in discrete case)
+        reward_threshold : if we exceed our best score by that threshold, we
+            save the model
+        reset_patience : ????? no longer sure about it
+        crop_image [True/False] : whether you want to crop the image before
+            injecting it into the network. In that case, the agent has no information
+            about its speed / etc. through these controls.
+    """
     def __init__(self, y_dim: int,
                  reward_threshold:float=20,
                  reset_patience:int=250,
@@ -223,6 +237,8 @@ class CarA2CAgent(SuperAgent):
             self.memory = ReplayMemory(MEM_SIZE)
         elif MEM_TYPE.lower() == 'torch':
             self.memory = TorchMemory(MEM_SIZE)
+        #Optimizer, scheduler and memory type are all attributes in DQN agent but not SuperAgent, need to be
+        #specified here
 
     def prepro(self, state: torch.Tensor) -> torch.Tensor:
         """Preprocessing for CarDQNAgent. Converts the image to b&w
@@ -261,8 +277,8 @@ class CarA2CAgent(SuperAgent):
     def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
 
-        Agent selects one of four actions to take either as a prediction of the model or randomly:
-        The chances of picking a random action are high in the beginning and decrease with number of iterations
+        Agent selects one action to take according to the model prediction:
+        The exploration part of this algorythm should be implemented using entropy
 
         Args:
             act_space : Action space of environment
@@ -285,24 +301,29 @@ class CarA2CAgent(SuperAgent):
             probs = probs.to('cpu').detach().numpy().T.squeeze(-1)
             action = torch.tensor(np.random.choice(flatdim(act_space), p= probs))
         self.last_action = action
+
+        # Pretty print function
         print(" 🏎️  🏎️  || Idle | Left | Right | Gas | Break")
         print(probs)
         print("\033[F"*2, end='')
+
         return action
 
     def optimize_model(self) -> list:
         """
 
         This function runs the optimization of the model:
-        it takes a batch from the buffer, creates the non final mask and computes:
-        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
-        returns the computed loss
+
+        it takes a batch from the buffer, then computes the logits and value prediction from the actor and critic models:
+        Calculates the advantage then the corresponding losses (val_loss/pol_loss) and performs a gradient descent on
+        each one.
+        returns the computed advantage for non breaking purposes
 
         Args:
             device (_type_, optional): Device to run computations on. Defaults to DEVICE.
 
         Returns:
-            losses (list): Calculated Loss
+            adv (list): Calculated Advantage
         """
         if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
             return
@@ -319,7 +340,8 @@ class CarA2CAgent(SuperAgent):
 
         with torch.no_grad():
             #next_actions = self.actor_net(next_state_batch*not_done_batch)
-            future_state_values, _ = self.net(next_state_batch)#*not_done_batch
+            future_state_values, _ = self.net(next_state_batch)
+            future_state_values = future_state_values*not_done_batch
 
             y_val_true = reward_batch.unsqueeze(-1) + GAMMA * future_state_values
 
@@ -337,15 +359,12 @@ class CarA2CAgent(SuperAgent):
         val_loss.backward(retain_graph=True)
         torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
 
-        # print(adv.detach())
-        # print(y_pol_pred)
         #Actor Loss - LogLikelihood
         pol_loss = torch.mean(-(adv * torch.log(y_pol_pred+1e-6)))
         pol_loss.backward()
         torch.nn.utils.clip_grad_value_(self.net.parameters(), 25)
         self.optimizer.step()
 
-        # self.losses.append(float(loss))
         self.adv.append(float(adv[0][0]))
         self.pol_loss.append(float(pol_loss.item()))
 
@@ -381,6 +400,8 @@ class CarA2CAgent(SuperAgent):
         action = action.unsqueeze(-1)
 
         self.rewards.append(reward[0].item())
+
+        #Stops episode at early stopping criterion
         current_episode_rewards = sum(self.rewards[-self.episode_duration[-1]:])
         episode_is_done = current_episode_rewards < EARLY_STOPPING_SCORE
 
