@@ -83,7 +83,7 @@ class MyPPO_continuous(nn.Module):
 
         return action, mu, sigma, value
 
-def prepro(state: torch.Tensor,crop_image :bool) -> torch.Tensor:
+def prepro(state: torch.Tensor,crop_image :bool, device=device) -> torch.Tensor:
         """Preprocessing for CarDQNAgent. Converts the image to b&w
         using the GREEN channel of each successive image.
 
@@ -94,11 +94,11 @@ def prepro(state: torch.Tensor,crop_image :bool) -> torch.Tensor:
             torch.Tensor: the preprocessed frame(s)
         """
 
-        state = torch.tensor(np.array(state))
+        state = torch.tensor(state.__array__(), device=device)
         if state.ndim == 4:
             state = torch.cat([state[elem,:,:,:] for elem in range(state.shape[0])], dim=2)
 
-        state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+        state = state.unsqueeze(0)
         state = state[:,:,:,1::3] / 256
         if crop_image:
             crop_height = int(state.shape[1] * 0.88)
@@ -119,7 +119,7 @@ def run_timestamps(env, model, timestamps=1024, render=False,device="cpu"):
     # Running timestamps and collecting state, actions, rewards and terminations
     for ts in range(timestamps):
         # Taking a step into the environment
-        model_input = prepro(state = state, crop_image=False)
+        model_input = prepro(state = state, crop_image=False, device=device)
         action, mu, sigma, value = model(model_input)
         new_state, reward, terminated, truncated, info = env.step(action[0].detach().numpy())
 
@@ -173,9 +173,9 @@ def get_losses(model, batch, epsilon, annealing, device="cpu"):
     # Getting old data
     n = len(batch)
     states = torch.cat([batch[i][0] for i in range(n)])
-    actions = torch.cat([batch[i][1] for i in range(n)]).view(n, 1)
-    mus = torch.cat([batch[i][2] for i in range(n)])
-    sigmas = torch.cat([batch[i][3] for i in range(n)])
+    actions = torch.cat([batch[i][1] for i in range(n)]).view(n, 3)
+    mus = torch.cat([batch[i][2] for i in range(n)]).view(n, 3)
+    sigmas = torch.cat([batch[i][3] for i in range(n)]).view(n, 3)
     values = torch.cat([batch[i][4] for i in range(n)])
     cumulative_rewards = torch.tensor([batch[i][-2] for i in range(n)]).view(-1, 1).float().to(device)
 
@@ -188,7 +188,7 @@ def get_losses(model, batch, epsilon, annealing, device="cpu"):
 
     # print(f'margin {margin}, epsilon {epsilon}, annealing {annealing}')
 
-    log_ratios = torch.sum(-(actions - mus) ** 2 / (2 * sigmas**2) \
+    log_ratios = torch.sum(-(actions - mus)**2 / (2 * sigmas**2) \
         + (actions - new_mus)**2 / (2 * new_sigmas)**2, dim=1)
     ratios = torch.exp(log_ratios)
 
@@ -206,7 +206,7 @@ def get_losses(model, batch, epsilon, annealing, device="cpu"):
     l_vf = torch.mean((cumulative_rewards - new_values) ** 2)
 
     # Bonus for entropy of the actor
-    entropy_bonus = 0
+    entropy_bonus = torch.tensor([0])
 
     return l_clip, l_vf, entropy_bonus
 
@@ -227,14 +227,17 @@ def training_loop(env, model, max_iterations, n_actors, gamma, epsilon, n_epochs
         annealing = anneals[iteration]
 
         # Collecting timestamps for all actors with the current policy
-        for actor in range(1, n_actors + 1):
-            print(f'Iteration {iteration}, actor {actor}', end='\r')
-            buffer.extend(run_timestamps(env, model, render=False, device=device))
-            # print(len(buffer))
+
+        print(f'Iteration {iteration}')
+
+        from concurrent.futures import ProcessPoolExecutor
+        # run_this_timestamp = lambda : run_timestamps(env, model, render=False, device=device)
+        with ProcessPoolExecutor(max_workers=n_actors) as exec:
+            for result in exec.map(run_timestamps, [env]*n_actors, [model]*n_actors):
+                buffer.extend(result)
 
         # Computing cumulative rewards and shuffling the buffer
         avg_rew = compute_cumulative_rewards(buffer, gamma)
-
         np.random.shuffle(buffer)
         losses = []
 
@@ -266,8 +269,9 @@ def training_loop(env, model, max_iterations, n_actors, gamma, epsilon, n_epochs
               f"Average Reward: {avg_rew:.2f}\t" \
               f"Loss: {curr_loss:.3f} " \
               f"(L_CLIP: {l_clip.item():.1f} | L_VF: {l_vf.item():.1f} | L_bonus: {entropy_bonus.item():.1f})"
+
         if avg_rew > max_reward:
-            torch.save(model.state_dict(), MODEL_PATH + '/model_{iteration}.model')
+            torch.save(model.state_dict(), MODEL_PATH + f'/model_{iteration}.model')
             max_reward = avg_rew
             log += " --> Stored model with highest average reward"
         print(log)
@@ -281,7 +285,7 @@ def testing_loop(env, model, MULTIFRAME,n_episodes, device):
 def main():
     # Parsing program arguments
     max_iterations = 100 # Number of iterations of training
-    n_actors = 12 # Number of actors for each update
+    n_actors = 4 # Number of actors for each update
     epsilon = 0.1 # Epsilon parameter, controls the margin decrease
     n_epochs = 10 # Number of training epochs per iteration
     batch_size = 64 # Batch size
@@ -291,7 +295,7 @@ def main():
             #controls term ~ mean((cumulative_rewards - new_values) ** 2)
     c2 = 0.01 # Weight for the entropy bonus in the loss function
     n_test_episodes = 10 # Number of episodes to render
-    MODEL_PATH = "/home/ralph/code/rhage183/from-a-to-b-with-rl/code/PPOmodels"
+    MODEL_PATH = "./PPOmodels/"
     MULTIFRAME = 3
 
 
