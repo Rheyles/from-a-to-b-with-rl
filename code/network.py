@@ -5,6 +5,11 @@ from params import MULTIFRAME
 
 
 class LinearDQN(nn.Module):
+    """Generic Simple DQN model. Well suited for frozen lake type environments.
+
+    Args:
+        nn (_type_): _description_
+    """
 
     def __init__(self, n_observations, n_actions):
         super(LinearDQN, self).__init__()
@@ -20,7 +25,13 @@ class LinearDQN(nn.Module):
         return self.layer3(x)
 
 class LinearA2CActor(nn.Module):
+    """Actor NN used in an A2C model with discrete input space. Has to be used in conjunction with
+    LinearA2CCritic
 
+
+    Args:
+        nn (_type_): _description_
+    """
     def __init__(self, n_observations, n_actions, *args, **kwargs) -> None:
 
         super().__init__(*args, **kwargs)
@@ -37,6 +48,12 @@ class LinearA2CActor(nn.Module):
 
 
 class LinearA2CCritic(nn.Module):
+    """ Critic NN used in an A2C model with discrete input space. Has to be used in conjunction with
+    LinearA2CActor
+
+    Args:
+        nn (_type_): _description_
+    """
     def __init__(self, n_observations, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -217,6 +234,12 @@ class ConvDQN3layersClassic(nn.Module):
 
 
 class ConvA2CBrice(nn.Module):
+    """ A2C NN adapted from ConvDQN2layersBrice CNN layer. Has a common 2D CNN backbone that feeds into
+    an actor and a critic Linear NN. Actor outputs predicted logits of actions and Critic outputs predicted value
+
+    Args:
+        nn (_type_): _description_
+    """
 
     def __init__(self, n_actions, dropout_rate=0.0):
         super().__init__()
