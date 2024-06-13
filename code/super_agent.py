@@ -42,7 +42,7 @@ class SuperAgent():
         pass
     def save_model(self, **kwargs):
         pass
-    def load_model(self):
+    def load_model(self,folder:str):
         pass
     def logging(self):
         pass

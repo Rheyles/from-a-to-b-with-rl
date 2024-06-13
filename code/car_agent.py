@@ -13,7 +13,7 @@ from gymnasium.spaces.utils import flatdim
 from params import *
 from super_agent import DQNAgent, SuperAgent
 from network import ConvDQN, ConvA2CDiscrete, ConvA2CContinuousActor, ConvA2CContinuousCritic
-from buffer import Transition
+from buffer import Transition, TransitionPPO, ReplayMemoryPPO
 from display import Plotter, dqn_diagnostics
 
 
@@ -685,7 +685,7 @@ class CarA2CAgentContinous(SuperAgent):
         # print(pol_loss.mean())
         # print("val_loss")
         # print(val_loss.mean())
-        loss = (pol_loss + val_loss - BETA * entropy).mean()
+        loss = (pol_loss + val_loss - ENTROPY_BETA * entropy).mean()
         # print('loss')
         # print(loss)
         # print(loss.item())
@@ -776,3 +776,181 @@ class CarA2CAgentContinous(SuperAgent):
                            fmt=["%7.2f", "%6d", "%4d",
                                 "%5.3e", "%5.3e", "%5.3e",
                                 "%5.3f", "%5.3f", "%5.3f"])
+
+
+
+class CarPPOAgentContinous(CarA2CAgentContinous):
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.memory = ReplayMemoryPPO(MEM_SIZE)
+
+        self.last_mu = None
+        self.last_sigma = None
+
+        self.clip_param = 0.2
+
+
+    def select_action(self, act_space : torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """
+
+        Agent selects one of four actions to take either as a prediction of the model or randomly:
+        The chances of picking a random action are high in the beginning and decrease with number of iterations
+
+        Args:
+            act_space : Action space of environment
+            state (gym.ObsType): Observation
+
+        Returns:
+            act ActType : Action that the self performs
+        """
+        state = self.prepro(state)
+        #sample = random.random()
+        #self.epsilon = EPS_END + (EPS_START - EPS_END) * \
+            #np.exp(-self.steps_done / EPS_DECAY)
+        self.time = (datetime.now() - self.creation_time).total_seconds()
+
+        if self.steps_done % IDLENESS == 0:
+            self.steps_done+=1 #Update the number of steps within one episode
+            self.episode_duration[-1]+=1 #Update the duration of the current episode
+            # if sample > self.epsilon or not self.exploration:
+            with torch.no_grad():
+                # torch.no_grad() used when inference on the model is done
+                # t.max(1) will return the largest column value of each row.
+                # second column on max result is index of where max element was
+                # found, so we pick action with the larger expected reward.
+
+                self.last_mu, self.last_sigma = self.actor_net(state.to(DEVICE))
+
+                print('\n Choosing action \n')
+                print(self.last_mu)
+                print(self.last_sigma)
+                print('\n\n')
+
+                self.last_sigma = torch.clamp(self.last_sigma,torch.Tensor([1e-6,1e-6,1e-6,1e-6]).to(DEVICE))
+                dist = torch.distributions.Normal(self.last_mu, self.last_sigma)
+                action = dist.sample()
+                action = torch.clamp(action, torch.Tensor([0,0,0,0]).to(DEVICE), torch.Tensor([1,1,1,1]).to(DEVICE))
+
+            self.last_action = action
+            return action, self.last_mu, self.last_sigma
+        else:
+            self.steps_done+=1 #Update the number of steps within one episode
+            self.episode_duration[-1]+=1 #Update the duration of the current episode
+            return self.last_action, self.last_mu, self.last_sigma
+
+
+    def optimize_model(self) -> list:
+        """
+
+        This function runs the optimization of the model:
+        it takes a batch from the buffer, creates the non final mask and computes:
+        Q(s_t, a) and V(s_{t+1}) to compute the Hubber Loss, performs backprop and then clips gradient
+        returns the computed loss
+
+        Args:
+            device (_type_, optional): Device to run computations on. Defaults to DEVICE.
+
+        Returns:
+            losses (list): Calculated Loss
+        """
+        if not self.training: # Si on ne s'entraîne pas, on ne s'entraîne pas
+            return
+
+        if self.episode_duration[-1] < 50: # On ne s'entraîne pas pendant le zoom de début d'épisode
+            return None
+
+        if len(self.memory) < BATCH_SIZE: return 0
+
+        transitions = self.memory.sample(BATCH_SIZE)
+
+        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+        # detailed explanation). This converts batch-array of Transitions
+        # to Transition of batch-arrays.
+
+        batch = TransitionPPO(*zip(*transitions)) # Needs to pass this from buffer class
+
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.action)
+        mu_batch = torch.cat(batch.mu)
+        sigma_batch = torch.cat(batch.sigma)
+        reward_batch = torch.cat(batch.reward)
+
+        mu_v, var_v = self.actor_net(state_batch)
+        var_v = torch.clamp(var_v,torch.Tensor([1e-6,1e-6,1e-6,1e-6]).to(DEVICE))
+
+        value_v = self.critic_net(state_batch, action_batch)
+
+        loss_value_v = nn.functional.mse_loss(value_v.squeeze(-1), reward_batch)
+
+        adv_v = reward_batch.unsqueeze(dim=-1) - value_v.detach()
+
+        dist_old = torch.distributions.Normal(mu_batch, sigma_batch)
+        dist_new = torch.distributions.Normal(mu_v, var_v)
+
+        log_probs_old = dist_old.log_prob(action_batch)
+        log_probs_new = dist_new.log_prob(action_batch)
+
+        ratio = log_probs_new / log_probs_old
+
+        surr1 = ratio * adv_v
+        surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * adv_v
+        action_loss = -torch.min(surr1, surr2).mean()
+
+        p1 = - (mu_v - action_batch).pow(2) / (2 * var_v)
+        p2 = - torch.log(torch.square(2 * var_v * np.pi))
+
+
+        log_prob_v = adv_v * (p1 + p2)
+        loss_policy_v = -log_prob_v.mean()
+        entropy_loss_v = ENTROPY_BETA * (-(torch.log(2*np.pi*var_v) + 1)/2).mean()
+
+        # loss_v = loss_policy_v + entropy_loss_v + loss_value_v
+        loss_v = action_loss + entropy_loss_v + loss_value_v
+
+        self.optimizer_actor.zero_grad()
+        self.optimizer_critic.zero_grad()
+        loss_v.backward()
+
+        torch.nn.utils.clip_grad_value_(list(self.actor_net.parameters()) + \
+                                        list(self.critic_net.parameters()), 100)
+
+        self.optimizer_actor.step()
+        self.optimizer_critic.step()
+
+        rwd_ep = self.episode_rewards[-1]
+        lr = self.scheduler.optimizer.param_groups[0]['lr']
+
+        # print(f" 🏎️  🏎️  || {'t':7s} | {'Step':7s} | {'Episode':14s} | {'Loss':8s}  |" \
+        #     + f" {'ε':7s}    | {'η':8s} | {'Rwd/ep':7s}")
+        # print(f" 🏎️  🏎️  || " \
+        #     + f'{self.time:7.1f} | {self.steps_done:7.0f} | ' \
+        #     + f'{self.episode:7.0f} / {NUM_EPISODES:4.0f} | ' \
+        #     + f'{self.losses[-1]:.2e} |'\
+        #     + f' {lr:.2e} | {rwd_ep:7.2f}')
+
+        # print("\033[F"*2, end='')
+
+        return self.losses
+
+    def update_memory(self, state, action, mu, sigma, next_state, reward) -> None:
+        self.rewards.append(reward[0].item())
+
+        if self.episode_duration[-1] < 50: # On ne met pas en mémoire le zoom de début d'épisode
+            return None
+
+        state = self.prepro(state)
+        next_state = self.prepro(next_state)
+
+        if sum(self.rewards[-1*min(self.reset_patience,self.episode_duration[-1]):]) <= (self.reset_patience-1)*-0.1:
+            reward[0]=-100
+            self.memory.push(state, action, mu, sigma, next_state, reward)
+            self.rewards[-1]=-100
+            return True
+
+        self.memory.push(state, action, mu, sigma, next_state, reward)
+
+        return None

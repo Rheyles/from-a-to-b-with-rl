@@ -145,7 +145,6 @@ class FrozenDQNAgentBase(DQNAgent):
             Plotter().plot_data_gradually('Loss', self.losses)
             Plotter().plot_data_gradually('Rewards',
                                           self.episode_rewards,
-                                          rolling=10,
                                           per_episode=True)
 
         # Optimize the model
@@ -378,7 +377,7 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
         else:
             next_observation = self.prepare_observation(next_state)
         self.memory.push(observation, action, next_observation, reward)
-        self.rewards.append( self.rewards[-1] + reward[0].item() )
+        self.rewards.append(reward[0].item() )
 
         #print(self.rewards)
         #print(reward)

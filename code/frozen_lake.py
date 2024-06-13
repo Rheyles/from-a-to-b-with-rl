@@ -12,7 +12,7 @@ print(f'\n~~~~~ FROZEN LAKE USING {DEVICE} ~~~~~')
 
 # Initialize Agent
 agt = agent.FrozenDQNAgentObs(env.env.action_space.n, env_map = env.env.get_wrapper_attr('desc'))
-agt.load_model("./models/2024-06-10 193218.600447FrozenDQNAgentObs")
+# agt.load_model("./models/2024-06-10 193218.600447FrozenDQNAgentObs")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer.')
 print(f'Agent explores {agt.exploration} | agent trains {agt.training}\n ')
 save_model = True

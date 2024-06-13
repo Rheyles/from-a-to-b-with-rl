@@ -27,7 +27,7 @@ class Environment():
         for t in count():
             action = agent.select_action(self.env.action_space, state) # , self.env.get_wrapper_attr('desc')
             if self.continuous:
-                action_list = [np.array(action)[0][0] - np.array(action)[0][1], np.array(action)[0][2], np.array(action)[0][3]]
+                action_list = [np.array(action.cpu())[0][0] - np.array(action.cpu())[0][1], np.array(action.cpu())[0][2], np.array(action.cpu())[0][3]]
                 observation, reward, terminated, truncated, _ = self.env.step(action_list)
             else :
                 observation, reward, terminated, truncated, _ = self.env.step(action.item())
@@ -41,6 +41,49 @@ class Environment():
 
             # Store the transition in memory
             reset = agent.update_memory(state, action, next_state, reward) # , self.env.get_wrapper_attr('desc')
+            agent.logging()
+
+            # Move to the next state
+            state = next_state
+
+            # Perform one step of the optimization (on the policy network)
+            agent.optimize_model()
+
+            # Update of the target network's weights
+            agent.update_agent(strategy=NETWORK_REFRESH_STRATEGY)
+
+            if done or reset: break
+
+        return t
+
+    def run_episode_continuous(self, agent) -> int:
+        """
+        Runs a single episode of the environment using the provided agent.
+        Store transition in memory and move to the next state.
+        Performance optimization and update target.
+
+        CHECK VALUE OF MULTIFRAME global variable. Has to be set to 1 for this method to be called correctly
+
+        Args:
+            agent (_type_): Component that makes the decision of what action to take
+        """
+        state, info = self.env.reset()
+        state = torch.tensor(state, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+
+        for t in count():
+            action, mu, sigma = agent.select_action(self.env.action_space, state)
+            action_list = [np.array(action.cpu())[0][0] - np.array(action.cpu())[0][1], np.array(action.cpu())[0][2], np.array(action.cpu())[0][3]]
+            observation, reward, terminated, truncated, _ = self.env.step(action_list)
+            reward = torch.tensor([reward], device=DEVICE)
+            done = terminated or truncated
+
+            if done:
+                next_state = None
+            else:
+                next_state = torch.tensor(observation, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+
+            # Store the transition in memory
+            reset = agent.update_memory(state, action, mu, sigma, next_state, reward) # , self.env.get_wrapper_attr('desc')
             agent.logging()
 
             # Move to the next state

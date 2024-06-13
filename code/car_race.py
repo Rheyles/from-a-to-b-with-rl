@@ -11,7 +11,7 @@ env.env.metadata['render_fps'] = RENDER_FPS
 print(f'\n~~~~~ CAR RACING USING {DEVICE} ~~~~~')
 
 # Initialize Agent
-agt = agent.CarA2CAgentContinous(y_dim=5,n_actions=4, dropout_rate=0.1)
+agt = agent.CarPPOAgentContinous(y_dim=5,n_actions=4, dropout_rate=0.1)
 #agt.load_model("./models/0610_0905_CarDQNAgent")
 print(f'Agent details : {LOSS} loss, {NETWORK_REFRESH_STRATEGY} net refresh, {OPTIMIZER} optimizer')
 print(f'Agent : exploration {agt.exploration}, training {agt.training}, multiframe {MULTIFRAME}\n')
@@ -21,7 +21,7 @@ try:
     save_model = True
     for _ in range(NUM_EPISODES):
         if MULTIFRAME == 1:
-            env.run_episode(agt)
+            env.run_episode_continuous(agt)
         else:
             env.run_episode_memory(agt)
         if RECORD_VIDEO:
