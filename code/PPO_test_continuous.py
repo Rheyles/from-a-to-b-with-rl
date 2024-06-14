@@ -4,28 +4,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from torch.optim.lr_scheduler import LinearLR
 from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
+from gymnasium.utils.save_video import save_video
 from gymnasium.wrappers.frame_stack import FrameStack
 
-
-
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-else:
-    try:
-        assert(torch.backends.mps.is_available())
-        device = torch.device("mps")
-    except:
-        device = torch.device('cpu')
 
 
 class MyPPO_continuous(nn.Module):
     """Implementation of a CONTINUOUS PPO model. The same backbone is used to get actor and critic values.
     Includes a backbone (to change for a cnn application), an actor and a critic"""
 
-    def __init__(self, MULTIFRAME, in_shape, n_actions, hidden_d=100, share_backbone=False):
+    def __init__(self, device:torch.device, MULTIFRAME:int, in_shape, n_actions, hidden_d=100, share_backbone=False,):
         # Super constructor
         super(MyPPO_continuous, self).__init__()
 
@@ -34,16 +26,17 @@ class MyPPO_continuous(nn.Module):
         self.n_actions = n_actions
         self.hidden_d = hidden_d
         self.share_backbone = share_backbone
+        self.device = device
 
         # Shared backbone for policy and value functions
         in_dim = np.prod(in_shape)
 
         self.convnet = nn.Sequential(
-            nn.Conv2d(MULTIFRAME, 16, kernel_size=7, stride=3,),
+            nn.Conv2d(MULTIFRAME, 32, kernel_size=7, stride=3,),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=0),
-            nn.Conv2d(16, 32, kernel_size=4, stride=1),
+            nn.Conv2d(32, 64, kernel_size=4, stride=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=0),
@@ -52,38 +45,39 @@ class MyPPO_continuous(nn.Module):
 
         # State action function
         self.actor_mu = nn.Sequential(
-            nn.Linear(1152, 64),
+            nn.Linear(2304, 128),
             nn.ReLU(),
-            nn.Linear(64, n_actions),
-            nn.Tanh()
+            nn.Linear(128, n_actions),
+            nn.Hardtanh(-1,1)
         )
 
         self.actor_sigma = nn.Sequential(
-            nn.Linear(1152, 64),
+            nn.Linear(2304, 128),
             nn.ReLU(),
-            nn.Linear(64, n_actions),
-            nn.Sigmoid()
+            nn.Linear(128, n_actions),
+            nn.Hardsigmoid()
         )
 
         # Value function
         self.critic = nn.Sequential(
-            nn.Linear(1152, 64),
+            nn.Linear(2304, 128),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(128, 1)
         )
 
     def forward(self, x):
         features = self.convnet(x)
         mu = self.actor_mu(features)
-        sigma = 0.1 + (5 - 0.1) * self.actor_sigma(features) # Ugly Brice Hack
+        sigma = self.actor_sigma(features) # Ugly Brice Hack
         value = self.critic(features)
         action = Normal(mu, sigma).sample() \
-            .clamp(min=torch.tensor([-1, 0, 0]),
-                   max=torch.tensor([1, 1, 1]))
+            .clamp(min=torch.tensor([-1, 0, 0]).to(self.device),
+                   max=torch.tensor([1, 1, 1]).to(self.device)) \
+            .type(dtype=torch.float)
 
         return action, mu, sigma, value
 
-def prepro(state: torch.Tensor,crop_image :bool, device=device) -> torch.Tensor:
+def prepro(state: torch.Tensor,crop_image :bool, device:torch.device) -> torch.Tensor:
         """Preprocessing for CarDQNAgent. Converts the image to b&w
         using the GREEN channel of each successive image.
 
@@ -105,7 +99,7 @@ def prepro(state: torch.Tensor,crop_image :bool, device=device) -> torch.Tensor:
             crop_w = int(state.shape[2] * 0.07)
             state = state[:, :crop_height, crop_w:-crop_w, :]
 
-        return state.moveaxis(-1, 1)
+        return state.moveaxis(-1, 1).to(device)
 
 
 @torch.no_grad()
@@ -114,14 +108,15 @@ def run_timestamps(env, model, timestamps=1024, render=False,device="cpu"):
      Returns a buffer with state action transitions and rewards."""
     buffer = []
     state = env.reset()[0]
+    acc_reward = 0
 
-    batch = []
     # Running timestamps and collecting state, actions, rewards and terminations
     for ts in range(timestamps):
         # Taking a step into the environment
-        model_input = prepro(state = state, crop_image=False, device=device)
+        model_input = prepro(state = state, crop_image=False, device=device).to(device)
         action, mu, sigma, value = model(model_input)
-        new_state, reward, terminated, truncated, info = env.step(action[0].detach().numpy())
+        new_state, reward, terminated, truncated, info = env.step(action[0].cpu().numpy())
+        acc_reward += reward
 
         # Rendering / storing (s, a, r, t) in the buffer
         if render:
@@ -133,7 +128,33 @@ def run_timestamps(env, model, timestamps=1024, render=False,device="cpu"):
         state = new_state
 
         # Resetting environment if episode terminated or truncated
-        if terminated or truncated:
+        if terminated or truncated or acc_reward < -25:
+            state = env.reset()[0]
+            acc_reward = 0
+
+    return buffer
+
+@torch.no_grad()
+def run_timestamps_with_video(env, model, timestamps=1024, render=True, device='cpu'):
+    buffer = []
+    acc_reward = 0
+    state = env.reset()[0]
+
+    # Running timestamps and collecting state, actions, rewards and terminations
+    for ts in range(timestamps):
+        # Taking a step into the environment
+        model_input = prepro(state = state, crop_image=False, device=device).to(device)
+        action, mu, sigma, value = model(model_input)
+        new_state, reward, terminated, truncated, info = env.step(action[0].cpu().numpy())
+
+
+        # Updating current state and buffer
+        buffer.append(new_state[-1])
+        state = new_state
+        acc_reward += reward
+
+        # Resetting environment if episode terminated or truncated
+        if terminated or truncated: 
             state = env.reset()[0]
 
     return buffer
@@ -165,7 +186,6 @@ def compute_cumulative_rewards(buffer, gamma):
         buffer[i][-2] = (buffer[i][-2] - mean) / std
 
     return avg_rew
-
 
 
 def get_losses(model, batch, epsilon, annealing, device="cpu"):
@@ -206,12 +226,12 @@ def get_losses(model, batch, epsilon, annealing, device="cpu"):
     l_vf = torch.mean((cumulative_rewards - new_values) ** 2)
 
     # Bonus for entropy of the actor
-    entropy_bonus = torch.tensor([0])
+    entropy_bonus = torch.mean(1/2 + torch.log((2*torch.pi)**0.5 *sigmas)).to(device=device)
 
     return l_clip, l_vf, entropy_bonus
 
 
-def training_loop(env, model, max_iterations, n_actors, gamma, epsilon, n_epochs, batch_size, lr,
+def training_loop(env : gym.Env, model, max_iterations, n_actors, gamma, epsilon, n_epochs, batch_size, lr,
                   c1, c2, device, MODEL_PATH, MULTIFRAME, env_name=""):
     """Train the model on the given environment using multiple actors acting up to n timestamps."""
 
@@ -229,11 +249,14 @@ def training_loop(env, model, max_iterations, n_actors, gamma, epsilon, n_epochs
         # Collecting timestamps for all actors with the current policy
 
         print(f'Iteration {iteration}')
-
-        from concurrent.futures import ProcessPoolExecutor
-        # run_this_timestamp = lambda : run_timestamps(env, model, render=False, device=device)
-        with ProcessPoolExecutor(max_workers=n_actors) as exec:
-            for result in exec.map(run_timestamps, [env]*n_actors, [model]*n_actors):
+        
+        with ProcessPoolExecutor() as exec:
+            for result in exec.map(run_timestamps, 
+                                   [env]*n_actors, 
+                                   [model]*n_actors,
+                                   [1024]*n_actors,
+                                   [False]*n_actors,
+                                   [device]*n_actors):
                 buffer.extend(result)
 
         # Computing cumulative rewards and shuffling the buffer
@@ -272,50 +295,67 @@ def training_loop(env, model, max_iterations, n_actors, gamma, epsilon, n_epochs
 
         if avg_rew > max_reward:
             torch.save(model.state_dict(), MODEL_PATH + f'/model_{iteration}.model')
+            # save_video(env.unwrapped.render(), 
+            #            video_folder=MODEL_PATH, 
+            #            fps=30,
+            #            name_prefix='video', 
+            #            episode_trigger = lambda x : True,
+            #            episode_index=iteration)
             max_reward = avg_rew
             log += " --> Stored model with highest average reward"
         print(log)
 
-def testing_loop(env, model, MULTIFRAME,n_episodes, device):
+def testing_loop(env : gym.Env, model, MULTIFRAME, n_episodes, device, video_path):
     """Runs the learned policy on the environment for n episodes"""
-    for _ in range(n_episodes):
-        run_timestamps(env, model, MULTIFRAME = MULTIFRAME ,render=True, device=device)
+    for ep in range(n_episodes):
+        buffer = run_timestamps_with_video(env, model, render=True, device=device)
+        print(len(buffer))
+        save_video(buffer, 
+                   video_folder=video_path,
+                   episode_trigger = lambda x : True,
+                   name_prefix= 'best_model_ep',
+                   fps=30,
+                   episode_index = ep)
 
 
 def main():
     # Parsing program arguments
-    max_iterations = 100 # Number of iterations of training
-    n_actors = 4 # Number of actors for each update
-    epsilon = 0.1 # Epsilon parameter, controls the margin decrease
+    max_iterations = 300 # Number of iterations of training
+    n_actors = 8 # Number of actors for each update
+    epsilon = 0.15 # Epsilon parameter, controls the margin decrease
     n_epochs = 10 # Number of training epochs per iteration
     batch_size = 64 # Batch size
-    lr = 1e-4 # Learning Rate
-    gamma = 0.9 # Discount factor gamma, accounts for the importance of previous rewards when calculating avg reward
+    lr = 1e-3 # Learning Rate
+    gamma = 0.99 # Discount factor gamma, accounts for the importance of previous rewards when calculating avg reward
     c1 = 0.9 # Weight for the value function in the loss function,
             #controls term ~ mean((cumulative_rewards - new_values) ** 2)
     c2 = 0.01 # Weight for the entropy bonus in the loss function
-    n_test_episodes = 10 # Number of episodes to render
+    n_test_episodes = 3 # Number of episodes to render
     MODEL_PATH = "./PPOmodels/"
     MULTIFRAME = 3
 
 
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        try:
-            assert(torch.backends.mps.is_available())
-            device = torch.device("mps")
-        except:
-            device = torch.device('cpu')
+    device = torch.device('cpu')
+    
+    # if torch.cuda.is_available():
+    #     device = torch.device("cuda")
+    # else:
+    #     try:
+    #         assert(torch.backends.mps.is_available())
+    #         device = torch.device("mps")
+    #     except:
+    #         device = torch.device('cpu')
 
 
-    # Creating environment (discrete action space)
+    # # Creating environment (discrete action space)
     env_name = "CarRacing-v2"
-    env = gym.make(env_name, continuous = True)
+
+    env = gym.make(env_name, continuous = True, render_mode='rgb_array')
     env = FrameStack(env, num_stack=MULTIFRAME)
 
-    # Creating the model (both actor and critic)
+    # # Creating the model (both actor and critic)
     model = MyPPO_continuous(MULTIFRAME = MULTIFRAME,
+                             device=device,
                              in_shape=env.action_space.shape[0],
                              n_actions=env.action_space.shape[0]).to(device)
 
@@ -323,16 +363,19 @@ def main():
     training_loop(env, model, max_iterations, n_actors, gamma, epsilon,
                   n_epochs, batch_size, lr, c1, c2, device, MULTIFRAME = MULTIFRAME, MODEL_PATH = MODEL_PATH ,env_name = env_name)
 
-    # Loading best model
+    # # Loading best model
     model = MyPPO_continuous(MULTIFRAME = MULTIFRAME,
+                             device=device,
                              in_shape=env.observation_space.shape[0],
                              n_actions=env.action_space.shape[0]).to(device)
 
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.load_state_dict(torch.load(MODEL_PATH + '/model_27.model', map_location=device))
 
     # # Testing
-    env = gym.make(env_name, render_mode="human", continuous = False)
-    testing_loop(env=env, model=model, MULTIFRAME=MULTIFRAME, n_episodes=n_test_episodes, device=device)
+    env = gym.make(env_name, continuous = True, render_mode='rgb_array')
+    env = FrameStack(env, num_stack=MULTIFRAME)
+
+    testing_loop(env=env, model=model, MULTIFRAME=MULTIFRAME, n_episodes=n_test_episodes, device=device, video_path=MODEL_PATH)
     env.close()
 
 if __name__ == '__main__':
