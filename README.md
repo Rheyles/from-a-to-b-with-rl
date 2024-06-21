@@ -81,33 +81,64 @@ not adapted to the continuous variant of [Car Racing](#car-racing-🏎️) or [M
 To understand a bit how these algorithms work, we need to introduce a few quantities.
 A **policy** $\pi$ is what the agent uses to decide of an action based on its state $s$. We will for now suppose that the agent strictly follows that policy for all instants $t$, so we add a few subscripts $\,\cdot_t$ to represent that
 
-$$ \pi(s_t) = a_t $$
+$$ \pi(s_t) = a_t  {\rm ~~~ at~all~times~} t$$
 
 Following this policy, we can define the **state value $V_\pi (s)$**.
 
-> _Imagine starting from a checkpoint at state $s$ at $t=0$ and let the game in 'auto-mode' using the policy $\pi$ until you reach the end of the game. We will have to sum all the rewards obtained by the agent_:
+> Imagine starting from a checkpoint at state $s$ at $t=0$ and let the game run in 'auto-mode' using the policy $\pi$ until you reach the end of the game. We sum all the rewards obtained by the agent and call the result the **state_value** of the policy $\pi$ starting from state $s$:
 
 $$ v_\pi (s) =  \left \{ \sum_t  r_t \Big | s_0 = s \right \} $$
 
-For mathematical reasons, we decide to put an emphasis on the short-term rewards by adding a **discount factor $0 < \gamma < 1$** in the previous equation, which will artificially decrease the "value" of rewards in the distant future :
+For mathematical reasons, we decide to put an emphasis on the short-term rewards by adding a **discount factor $0 < \gamma < 1$** in the previous equation, which will artificially decrease the "value" of rewards in the distant future, leading to a new quantity:
 
 $$ V_\pi (s) = \left \{ \sum_t r_t \gamma^t \Big | s_0 = s \right \}$$
 
-The **action value function $Q_\pi(s,a)$ is roughly the same quantity, however we can take _any_ action at time $t=0$ and _then_ we follow the policy $\pi$**. Computing this function, or approximating it is one of the core ideas of Q-learning and DQN. We have :
+The **action value function $Q_\pi(s,a)$ is roughly the same quantity, however we can take _any_ action at time $t=0$ and _then_ we follow the policy $\pi$**. Computing this function, or approximating it is one of the core ideas of Q-learning and DQN. We have:
 
 $$ Q_\pi (s,a) = \left \{ \sum_t r_t \gamma^t \Big | s_0 =s, a_0 = a\right \} $$
 
-That function would be a two-dimensional array of size $N_s \times N_a$ in your computer memory, with $N_s$ being the number of different states and $N_a$ the number of possible actions. So, in the case of :
+That function would be a two-dimensional array of size $N_s \times N_a$ in your computer memory, with $N_s$ being the number of different states and $N_a$ the number of possible actions. So, in the case of:
 - [Frozen Lake](#frozen-lake-🌲), $Q$ would be a ($25 \times 4$) array, manageable
 - [Car Race](#car-racing-️🏎️), the images defining the states are of size $(96 \times 96 \times 3)$ with each pixel taking a value between 0 and 255, so theoretically we have ($256^{96 \times 96  \times 3 } \times 5$) states, which is, for all practical purposes, $+\infty$. This is why regular $Q$-learning is impossible on Car Race.
 
 ### Q-learning
 
-I think the critical question at this stage is : **how does  computing all Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^*$ leads to the highest state-action value $Q(s,a^*)$. And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as :
+I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^*$ leads to the highest state-action value $Q(s,a^*)$. And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
 
 $$\pi^* (s) = {\rm argmax}_a \, Q(s,a)$$
 
-The main issue is that **we do not know initially the _true_ state action values $Q(s,a)$**. We have to build them from scratch !
+The main issue is that **we do not know initially the _true_ state action values $Q(s,a)$**,
+and we do not know which states and which actions lead to rewards! We have to build everything from scratch. How do we do that? Let's suppose the initial $Q^{\rm est}(s,a)$ table is initialized
+with zeros, and that the agent has (randomly) reached the square to the right of
+the gift (state $s = 21$):
+
+<p align="center"><img src="readme_assets/near_gift.png", width=200></p>
+
+We ... don't really have a policy yet, so it is difficult to compute a value for $V$, but we can give a try with $Q^{\rm est}$, say for going left $\leftarrow$:
+
+$$Q^{\rm est} (s=21, \leftarrow) = 1 $$
+
+There are no additional terms to the sum since the game (episode) ends after the elf reaches the gift. We could then update the $Q$-table so that it reflects this new value, and then the agent would 'learn' that doing $\leftarrow$ from state $s=21$ is a good idea !
+
+But how do we compute the values for the _other_ actions, those that do not end the episode ? Let's start by re-writing the 'real' $Q(s_0,a)$ for a state $s_0$ (the subscript corresponds to $t=0$) in a slightly different way :
+
+$$Q(s_0,a) = \left \{ r_0 + \gamma \sum_{t} r_{t+1} \gamma^t  \Big | s_0 = s, a_0 = a  \right \} $$
+
+What do these future rewards in the sum correspond to ? They do correspond to choosing the optimal policy for every step $t \geq 1$:
+
+$$\gamma \sum_t r_{t+1} \gamma^t  = {\rm max}_{a'} \, Q(s_1, a')$$
+
+We can then rewrite the previous sum as :
+
+$$Q(s_0,a) = \left \{ r_0 + \gamma \, {\rm max}_{a'} Q(s_1, a')   \Big | s_0 = s, a_0 = a  \right \} $$
+
+**Now, for the magic part** : we arbitratily decide to apply the above equation, but with our $Q^{\rm est}$ 'empirical' estimate of the real $Q$. We can use the right part of the above equation to _update_ the value of $Q^{\rm est}(s_0,a)$ (the left part of the above equation). In mathematical terms:
+
+$$ Q^{\rm est}(s_0,a) \leftarrow r_0 + \gamma \, {\rm max}_{a'} Q^{\rm est} (s_1, a) $$
+
+**By doing that, we should _eventually_ have $Q^{\rm est} = Q$ after enough updates**. In practice, we will not completely overwrite the function each time we want to update it; we will rather update it by a small amount :
+
+$$ Q^{\rm est}(s_0, a) \leftarrow (1 - \alpha) Q^{\rm est}(s_0, a) + \alpha  \left [ r_0 + \gamma \, {\rm max}_{a'} Q^{\rm est} (s_1, a) \right ]  $$
 
 #### Replay memory
 
