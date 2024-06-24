@@ -114,7 +114,7 @@ the gift (state $s = 21$):
 
 <p align="center"><img src="readme_assets/near_gift.png", width=200></p>
 
-We ... don't really have a policy yet, so it is difficult to compute a value for $V$, but we can give a try with $Q^{\rm est}$, say for going left $\leftarrow$:
+But ... we don't really have a policy yet ! It is then hard to compute $Q^{\rm est}$, but let's try doing that for action $\leftarrow$:
 
 $$Q^{\rm est} (s=21, \leftarrow) = 1 $$
 
@@ -126,33 +126,74 @@ $$Q(s_0,a) = \left \{ r_0 + \gamma \sum_{t} r_{t+1} \gamma^t  \Big | s_0 = s, a_
 
 What do these future rewards in the sum correspond to ? They do correspond to choosing the optimal policy for every step $t \geq 1$:
 
-$$\gamma \sum_t r_{t+1} \gamma^t  = {\rm max}_{a'} \, Q(s_1, a')$$
+$$ \sum_t r_{t+1} \gamma^t  = {\rm max}_{a'} \, Q(s_1, a')$$
 
 We can then rewrite the previous sum as :
 
 $$Q(s_0,a) = \left \{ r_0 + \gamma \, {\rm max}_{a'} Q(s_1, a')   \Big | s_0 = s, a_0 = a  \right \} $$
 
-**Now, for the magic part** : we arbitratily decide to apply the above equation, but with our $Q^{\rm est}$ 'empirical' estimate of the real $Q$. We can use the right part of the above equation to _update_ the value of $Q^{\rm est}(s_0,a)$ (the left part of the above equation). In mathematical terms:
+**Now, for the magic part : we arbitratily decide to apply the above equation, but with our $Q^{\rm est}$ 'empirical' estimate of the real $Q$**. We can use the right part of the above equation to _update_ the value of $Q^{\rm est}(s_0,a)$ (the left part of the above equation). In mathematical terms:
 
 $$ Q^{\rm est}(s_0,a) \leftarrow r_0 + \gamma \, {\rm max}_{a'} Q^{\rm est} (s_1, a) $$
 
-**By doing that, we should _eventually_ have $Q^{\rm est} = Q$ after enough updates**. In practice, we will not completely overwrite the function each time we want to update it; we will rather update it by a small amount :
+**By doing that, $Q^{\rm est}$ should _eventually_ converge towards  $Q$ after enough updates**. In practice, we will not completely overwrite the function each time we want to update it; we will rather update it by a small amount :
 
-$$ Q^{\rm est}(s_0, a) \leftarrow (1 - \alpha) Q^{\rm est}(s_0, a) + \alpha  \left [ r_0 + \gamma \, {\rm max}_{a'} Q^{\rm est} (s_1, a) \right ]  $$
+$$ Q^{\rm est}(s_0, a) \leftarrow (1 - \alpha) Q^{\rm est}(s_0, a) + \alpha  \left [ r_0 + \gamma \, {\rm max}_{a'} Q^{\rm est} (s_1, a) \right ] $$
 
-#### Replay memory
-
-
-
-
-
-
-
+If you want to know more, I can only recommend you read about the _excellent_
+[intro to Q-learning by Maxime Labonne on Medium](https://towardsdatascience.com/q-learning-for-beginners-2837b777741). It notably shows how the Q-table is updated 'in the real world'.
 
 ### Deep-Q Networks (DQN)
 
+Deep-Q networks were introduced in a [2013 conference article](https://arxiv.org/abs/1312.5602)
+to solve one burning question : how do you build a $Q$-array if your number of states is
+(as in Car Race) virtually infinite ? The article finds an interesting workaround.
+They replaced the real $Q$-array with a **neural network** that works as a substitute
+for the table : for a given state $s$, it will output $N_a$ $Q$-scores corresponding to all the possible actions.
+
+The resulting Deep-Q network can either be fully connected if the number of states
+is finite, but can also include convolutional neural network layers (CNNs) if
+the state $s$ is an image -- or an image stack. They then provide a very flexible
+alternative to Q-tables, that have allowed the original DQN team
+to play Atari games with little to no adaptation of the game itself.
+
+**How do we optimize / update the network ?** One way to optimize the model is
+to create a loss $\mathcal{L}^{\rm dqn}$ that _forces_ the network to converge to the
+accurate values of $Q$, in a manner that is similar to the iterative replacement
+we did for regular Q-learning :
+
+$$\mathcal{L}^{\rm dqn} = \left | \underbrace{Q^{\rm dqn} (s_t,a_t)}_{\rm Current} - \underbrace{r_t - {\rm max}_a' Q^{\rm dqn}(s_{t+1}, a')}_{\rm Target} \right |$$
+
+Minimizing this loss (here, a MAE, but it could also be a Huber loss, or a MSE ...)
+with a learning rate $\eta$ will lead to a $Q^{\rm dqn}$ that
+slowly converges towards an unbiased (read _faithful_) estimation of the $Q$ values
+of each state. From that, the agent can decide to make the best decision for any given state.
+
+There are additional, more practical challenges before _actually_ implementing
+a deep-Q network, notably :
+
+- How to initially explore the environment instead of systematically trying to
+make the best decision. This can be done using **$\epsilon$-greedy policies**, i.e.
+making decisions at random with a probability $\epsilon$. Check out the [HuggingFace webpage on the subject](https://huggingface.co/learn/deep-rl-course/unit2/q-learning#step2).
+
+- _When_ do we update the deep-Q network ? Using which data ? Instead of simply relying
+on the data from the previous step, we can build a **replay memory buffer** that
+saves the most recent (say $10\,000$) actions taken. We can then draw samples from
+that replay buffer after each step and use this "batch" to continuously train
+the deep-learning network. Check out the [HuggingFace section on the subject on the Deep-Q network page](https://huggingface.co/learn/deep-rl-course/unit2/q-learning#step2).
+
+- How do we prevent too **much correlation between the Target part and the Current part of the network?**
+One way to deal with this is to decouple these two networks, and only update the target
+every $N$ steps. We can also decide to replace the target network more progressively
+than the policy network to _stabilise_ the convergence of the algorithm.
+
+More info on Deep-Q networks from the [very nice article of Yuki Minai on the subject](https://medium.com/@ym1942/deep-q-learning-dqn-tutorial-with-cartpole-v0-5505dbd2409e).
+
+### Advantage Actor Critic (A2C)
 
 
+
+### Proximal Policy Optimization (PPO)
 
 
 ## Setup
