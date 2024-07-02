@@ -87,15 +87,15 @@ Following this policy, we can define the **state value $V_\pi (s)$**.
 
 > Imagine starting from a checkpoint at state $s$ at $t=0$ and let the game run in 'auto-mode' using the policy $\pi$ until you reach the end of the game. We sum all the rewards obtained by the agent and call the result the **state_value** of the policy $\pi$ starting from state $s$:
 
-$$ v_\pi (s) =  \left \lbrace \sum_t  r_t \Big | s_0 = s \right \rbrace $$
+$$ v_\pi (s) =  \left \lbrace \sum_t  r_t \Big \vert s_0 = s \right \rbrace $$
 
 For mathematical reasons, we decide to put an emphasis on the short-term rewards by adding a **discount factor $0 < \gamma < 1$** in the previous equation, which will artificially decrease the "value" of rewards in the distant future, leading to a new quantity:
 
-$$ V_\pi (s) = \left \lbrace \sum_t r_t \gamma^t \Big | s_0 = s \right \rbrace $$
+$$ V_\pi (s) = \left \lbrace \sum_t r_t \gamma^t \Big \vert s_0 = s \right \rbrace $$
 
 The **action value function $Q_\pi(s,a)$ is roughly the same quantity, however we can take _any_ action at time $t=0$ and _then_ we follow the policy $\pi$**. Computing this function, or approximating it is one of the core ideas of Q-learning and DQN. We have:
 
-$$ Q_\pi (s,a) = \left \lbrace \sum_t r_t \gamma^t \Big | s_0 =s, a_0 = a\right \rbrace $$
+$$ Q_\pi (s,a) = \left \lbrace \sum_t r_t \gamma^t \Big \vert s_0 =s, a_0 = a\right \rbrace $$
 
 That function would be a two-dimensional array of size $N_s \times N_a$ in your computer memory, with $N_s$ being the number of different states and $N_a$ the number of possible actions. So, in the case of:
 - [Frozen Lake](#frozen-lake-🌲), $Q$ would be a ($25 \times 4$) array, manageable
@@ -122,7 +122,7 @@ There are no additional terms to the sum since the game (episode) ends after the
 
 But how do we compute the values for the _other_ actions, those that do not end the episode ? Let's start by re-writing the 'real' $Q(s_0,a)$ for a state $s_0$ (the subscript corresponds to $t=0$) in a slightly different way :
 
-$$Q(s_0,a) = \left \lbrace r_0 + \gamma \sum_{t} r_{t+1} \gamma^t  \Big | s_0 = s, a_0 = a  \right \rbrace $$
+$$Q(s_0,a) = \left \lbrace r_0 + \gamma \sum_{t} r_{t+1} \gamma^t  \Big \vert s_0 = s, a_0 = a  \right \rbrace $$
 
 What do these future rewards in the sum correspond to ? They do correspond to choosing the optimal policy for every step $t \geq 1$:
 
@@ -130,7 +130,7 @@ $$ \sum_t r_{t+1} \gamma^t  = {\rm max}_{a'} \, Q(s_1, a')$$
 
 We can then rewrite the previous sum as :
 
-$$Q(s_0,a) = \left \lbrace r_0 + \gamma \, {\rm max}_{a'} Q(s_1, a')   \Big | s_0 = s, a_0 = a  \right \rbrace $$
+$$Q(s_0,a) = \left \lbrace r_0 + \gamma \, {\rm max}_{a'} Q(s_1, a')   \Big \vert s_0 = s, a_0 = a  \right \rbrace $$
 
 **Now, for the magic part : we arbitratily decide to apply the above equation, but with our $Q^{\rm est}$ 'empirical' estimate of the real $Q$**. We can use the right part of the above equation to _update_ the value of $Q^{\rm est}(s_0,a)$ (the left part of the above equation). In mathematical terms:
 
@@ -163,7 +163,7 @@ accurate values of $Q$, in a manner that is similar to the iterative replacement
 we did for regular Q-learning :
 
 $$
-\mathcal{L}^{\rm dqn} = \left | \underbrace{Q^{\rm dqn} (s_t,a_t)}_{Current} - \underbrace{r_t - {\rm max}_a' Q^{\rm dqn}(s_{t+1}, a')}_{Target} \right |
+\mathcal{L}^{\rm dqn} = \left \vert \underbrace{Q^{\rm dqn} (s_t,a_t)}_{toto} - r_t - {\rm max}_a' Q^{\rm dqn}(s_{t+1}, a') \right \vert
 $$
 
 Minimizing this loss (here, a MAE, but it could also be a Huber loss, or a MSE ...)
