@@ -163,8 +163,17 @@ accurate values of $Q$, in a manner that is similar to the iterative replacement
 we did for regular Q-learning :
 
 $$
-\mathcal{L}^{\rm dqn} = \left \vert Q^{\rm dqn} (s_t,a_t) - r_t - {\rm max}_a' Q^{\rm dqn}(s_{t+1}, a') \right \vert
+\mathcal{L}^{\rm dqn}
 $$
+
+$$
+{\rm max}_a' Q^{\rm dqn}(s_{t+1}, a')  \vert
+$$
+
+$$
+\vert Q^{\rm dqn} (s_t,a_t) - r_t -
+$$
+
 
 Minimizing this loss (here, a MAE, but it could also be a Huber loss, or a MSE ...)
 with a learning rate $\eta$ will lead to a $Q^{\rm dqn}$ that
