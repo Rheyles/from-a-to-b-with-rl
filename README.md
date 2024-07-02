@@ -165,10 +165,8 @@ we did for regular Q-learning :
 $$
 \begin{array}{rcc}
 \mathcal{L}^{\rm dqn} =& \vert Q^{\rm dqn} (s_t,a_t) &- r_t - {\rm max}_a' Q^{\rm dqn}(s_{t+1}, a') \vert \\
-& \text{\small current} & \text{\small target~~~~~~~~}
-\end{array}
-
-$$
+& \text{\small current} & \text{\small target}
+\end{array}$$
 
 Minimizing this loss (here, a MAE, but it could also be a Huber loss, or a MSE ...)
 with a learning rate $\eta$ will lead to a $Q^{\rm dqn}$ that
