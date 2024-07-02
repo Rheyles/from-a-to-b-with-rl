@@ -163,15 +163,7 @@ accurate values of $Q$, in a manner that is similar to the iterative replacement
 we did for regular Q-learning :
 
 $$
-\mathcal{L}^{\rm dqn}
-$$
-
-$$
-{\rm max}_a' Q^{\rm dqn}(s _{t+1}, a')  \vert
-$$
-
-$$
-\vert Q^{\rm dqn} (s_t,a_t) - r_t -
+\mathcal{L}^{\rm dqn} = \left \vert Q^{\rm dqn} (s_t,a_t) - \underbrace{r_t - {\rm max}_a' Q^{\rm dqn}(s _{t+1}, a')} _{\rm Target} \right \vert
 $$
 
 
