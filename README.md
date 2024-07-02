@@ -167,7 +167,7 @@ $$
 $$
 
 $$
-{\rm max}_a' Q^{\rm dqn}(s_{t+1}, a')  \vert
+{\rm max}_a' Q^{\rm dqn}(s _{t+1}, a')  \vert
 $$
 
 $$
