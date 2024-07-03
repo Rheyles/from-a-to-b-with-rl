@@ -166,7 +166,7 @@ accurate values of $Q$, in a manner that is similar to the iterative replacement
 we did for regular Q-learning :
 
 $$
-\mathcal{L}^{\rm dqn} = \left \vert \underbrace{Q^{\rm dqn} (s_t,a_t)} _{\rm Current} - \underbrace{r_t - {\rm max}_a' Q^{\rm dqn}(s_ {t+1}, a')} _{\rm Target} \right \vert
+\mathcal{L}^{\rm dqn} = \left \vert \underbrace{Q^{\rm dqn} (s_t,a_t)} _{\rm Current} - \underbrace{r_t - {\rm max}_a' Q^{\rm dqn}(s _{t+1}, a')} _{\rm Target} \right \vert
 $$
 
 Minimizing this loss (here, a MAE, but it could also be a Huber loss, or a MSE ...)
