@@ -88,11 +88,11 @@ $$ \pi(s_t) = a_t  \text{ at all times } t$$
 
 Following this policy, we can define the **state value $V_\pi (s)$**.
 
-> Imagine starting from a checkpoint at state $s$ at $t=0$ and let the game run in 'auto-mode' using the policy $\pi$ until you reach the end of the game. We sum all the rewards obtained by the agent and call the result the **state_value** of the policy $\pi$ starting from state $s$:
+> Imagine starting from a checkpoint at state $s$ at $t=0$ and let the game run in 'auto-mode' using the policy $\pi$ until you reach the end of the game. We sum all the rewards obtained by the agent and call the result the **state_value** of the policy $\pi$ starting from state $s$. In mathematical terms, we write it the following way:
 
 $$ v_\pi (s) =  \left \lbrace \sum_t  r_t \Big \vert s_0 = s \right \rbrace $$
 
-For mathematical reasons, we decide to put an emphasis on the short-term rewards by adding a **discount factor $0 < \gamma < 1$** in the previous equation, which will artificially decrease the "value" of rewards in the distant future, leading to a new quantity:
+We _suppose_ that everything on the right of the vertical bar $\vert$ is true when we compute the rest of the equation. For mathematical reasons, we decide to put an emphasis on the short-term rewards by adding a **discount factor $0 < \gamma < 1$** in the previous equation, which will artificially decrease the "value" of rewards in the distant future, leading to a new quantity:
 
 $$ V_\pi (s) = \left \lbrace \sum_t r_t \gamma^t \Big \vert s_0 = s \right \rbrace $$
 
@@ -106,7 +106,7 @@ That function would be a two-dimensional array of size $N_s \times N_a$ in your 
 
 ### Q-learning
 
-I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^*$ leads to the highest state-action value $Q(s,a^*)$. And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
+I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^* $ leads to the highest state-action value $Q(s,a^*). And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
 
 $$\pi^* (s) = {\rm argmax}_a \, Q(s,a)$$
 
@@ -216,19 +216,45 @@ These two points raise a few issues :
 
 One idea to solve the issue would be to compute _probabilities_ to make decisions based on a given state, instead of giving them a score. We would then need a method to modify these probabilities based on the future rewards that these decisions lead to. In that case, we can hope that the trained model agent have a 50/50 probability of going left or right when they are on squares $1$ and $2$.
 
-A 'simple' -- everything is relative -- implementation of this idea is the [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit4/policy-gradient#the-reinforce-algorithm-monte-carlo-reinforce) algorithm. We have decided to implement a slightly more complex algorithm, called _Advantage Actor Critic_ that solves a few issues with [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit6/variance-problem).
+A 'simple' -- everything is relative -- implementation of this idea is the [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit4/policy-gradient#the-reinforce-algorithm-monte-carlo-reinforce) algorithm. We have decided to implement a slightly more complex algorithm, called _Advantage Actor Critic_ that solves a few issues with [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit6/variance-problem) so that we can solve more complex problems.
 
 #### Principle of the A2C
 
-The **A2C** algorithm uses _two_ neural networks:
+The **A2C** algorithm uses _two_ neural networks, an _actor_ network that makes decitions and a _critic_ network that judges them.
 
-1. The **actor network** is tasked with making decisions based on an observation. Basically they are in charge of $\pi(s)$ 
-2. The **critic** is tasked with judging the actions of the actor. They could be in charge, for instance, of estimating the action value $Q^{\rm est}(s,a)$, but in the implementation the advantage $A$ is chosen instead. It is defined as : 
+#####  The **actor network** 
 
-$$A(s,a) = Q(s,a) - V(s)$$
+It is tasked with making decisions based on the agent observations $o$. We can say it is the part of the algorithm in charge of $\pi(s)$. In this case, the $\pi(s)$ will represent the _probability distribution_ of taking the possible actions $a$. We will write it as $\pi(s,a)$ in this section. For discrete actions, we will have finite probabilities $0 < p(a) < 1$ for every action. For continuous actions, $\pi(s,a)$ will be a continuous probability density function (e.g. a normal distribution). 
+  
+##### The **critic** network 
 
-The _advantage_ then measures how much better it is to make a particular action $a$ when the agent is in state $s$. I am not an expert in RL, but apparently it helps _stabilize_ the training process to choose $A$ instead of directly $Q$.
+It is tasked with judging the actions of the actor. They could be in charge, for instance, of estimating the action value $Q^{\rm est}(s,a)$ of the actions, but in the implementation the advantage $A$ is chosen instead. It is defined as : 
 
+$$A(s,a) = Q(s,a) - V(s) = r + \gamma V(s') - V(s)$$
+
+Here, the state $s'$ results from taking the action $a$ from the previous state $s$. The _advantage_ then measures how much better it is to make a particular action $a$ when the agent is in state $s$ compared to an 'average' action. I am not an expert in Reinforcement Learning, but apparently it helps _stabilize_ the training process to choose $A$ compared to using $Q$. 
+
+##### Optimizing the two networks 
+
+How does the actor improve itself ? And how can the critic improve at all ?!? Two excellent questions ! **The actor will update the weights of its model, so the weights of $\pi(s)$, based on the input from the critic**. Basically, it will try to maximise the following function : 
+
+$$ \mathcal{G} _ {actor} = \underbrace{\log \pi(s,a)}_ \text{from Actor} \, \underbrace{A^{\rm est}(s,a)}_\text{from Critic}$$
+
+The actor will then adapt the weights of its policy $\pi$ to _increase_ the probability of choosing an action $a$ when it is very advantageous (according to the critic), and in contrast, it will _decrease_ the probability of choosing actions $a$ that have a negative advantage. The function $\mathcal{G}$ can be seen as the opposite of a loss. We will actually minimise $\mathcal{L} _{\rm actor} = - \mathcal{G} _ {\rm actor}$ in our code. The _rate_ at which the weights are modified for the actor is called $\alpha$, the actor learning rate. 
+
+The **critic has to get as good as possible at knowing the rewards the actor will get when selecting a given action**. In a way similar to what we saw with [deep-Q networks](#deep-q-networks-dqn), we can build a similar loss of the following type (here, we take the mean squared error) : 
+
+$$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma Q^{\rm est}(s _{t+1},a _{t+1}) - Q^{\rm est} (s _t, a _t) \right \vert^2$$ 
+
+When we minimise that loss, we become _better_ at predicting the reward we get, since we are continuously 'injecting some truth' (the $r_t$) into it. Let's consider a series of actions and rewards $(a_t, r_t)$ and rewrite our loss in terms of $V^{\rm est}$ : 
+
+$$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma \left [ r_ {t+1} + \gamma V^{\rm est}(s _{t+2}) \right ] - r_t - \gamma V^{\rm est}(s _ {t+1}) \right \vert ^2  $$
+
+Rearranging some elements, we end up with :
+
+$$ \mathcal{L}_{\rm critic} = \gamma \left \vert r _ {t+1} + \gamma V^{\rm est} (s _ {t+2}) - V^{\rm est} (s _ {t+1})\right \vert ^2 \simeq \gamma \left [A(s _ {t+1}, a _ {t+1}) \right ]^2$$
+
+So our loss is _basically_ the square of the advantage $A^{\rm est}$, here for $t+1$ and with an additional factor $\gamma$. The latter is not really relevant to us, since multiplying a function by a constant will not change the location of its minimum. **The actual loss is computed from the advantage at time $t$ instead of $t+1$**, but the main principle behind it remains the same. The formula above also tells us that we _no longer need to compute_ estimated $Q$ values, so we can actually work around the issue of having too many model outputs !
 
 ### Proximal Policy Optimization (PPO)
 
