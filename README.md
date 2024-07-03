@@ -18,15 +18,13 @@ In this very simple environment, we have :
 - the possible agent actions $a$, here discrete actions $\leftarrow (0), \downarrow (1), \rightarrow (2), \uparrow (3)$
 - a reward $r = +1$ on the square where the gift lies.
 
-Reaching the gift ends an 'episode'. **Falling into one of the frozen lakes triggers the end of an episode too with no reward**.
-
-In the original game, the agent state $s$ corresponds to their observation $o$, which means the agent does not know its surroundings.
+Reaching the gift ends an 'episode'. **Falling into one of the frozen lakes triggers the end of an episode too with no reward**. In the original game, the agent state $s$ corresponds to their observation $o$, which means the agent does not know its surroundings.
 
 #### Variants
 
 We have developed two variants of the Frozen Lake environment :
 
-- One setting a **negative reward $ r = -1 $ for falling into the lake**
+- One setting a **negative reward $r = -1$ for falling into the lake**
 - One **allowing the agent to know the _type_ of the squares next to them**
 
 ### Car Racing 🏎️
@@ -51,8 +49,13 @@ which means you can both accelerate, brake and turn at the same time : a perfect
 
 ### Mountain car ⛏️
 
+<p align="center"> <img src="readme_assets/mountain_car_continuous.gif" align="center" width=200> </p>
 
+In this environment :
 
+* The state $s$ (or observation $o$) is given by the _position_ of the car $x$ and its velocity $v$, both of which are unbounded.
+* The car action is actually a force $F \in [-1,1]$ that can be applied to the car at each time step
+* The rewards are a bit more subtle : a penalty of $-0.1 F^2$ is applied to prevent the car from applying large forces all the time. An additional reward of $+100$ is applied when the car moves past the flag. 
 
 
 ## Algorithms
@@ -193,10 +196,45 @@ More info on Deep-Q networks from the [very nice article of Yuki Minai on the su
 
 ### Advantage Actor Critic (A2C)
 
+#### Limitations of Q-learning based algorithms
+
+In Deep-Q-learning, we only have _one_ neural network, that takes as input the _states_ (or _observations_) and returns _scores_ for each possible decision, from  which he best estimated decision can be taken. This means that :
+1. __We need to compute this Q score for every possible action to select the best action__. 
+  
+2. __We have to follow the best determined action all the time once it has been determined__ if we consider that we no longer _explore_ with a probability $\epsilon$.
+
+These two points raise a few issues : 
+
+1. Let's imagine now that our actions are continuous, for instance the angle of a steering wheel if you are driving. How do we know what the best angle is if you want to turn left ? We could _discretize_ the possible actions (take 360 values) and build a DQN based on these 360 values. This becomes a bit of a pickle if you start having to take into account braking (another 100 values, say) and gas (another 100 values). If you are allowed to brake, accelerate and turn at the same time (a good starting point for _drifting_), you have $36\,000\,000$ possible actions. It does not really sound reasonable to train a model with _that many_ outputs.
+   
+2. For some specific states $s$, it might be optimal to act with a bit of uncertainty instead of being completely deterministic. A good example is the one presented in the [HuggingFace lecture on Policy gradients](https://huggingface.co/learn/deep-rl-course/en/unit4/advantages-disadvantages). Imagine a bicycle that moves in a small room filled with a trophy (good) and two spiders (bad). It only knows the type of the squares next to itself (a wall, an empty space, etc.). In this case, a Q-learning algorithm _should_ eventually lead to the same score for the squares $1$ and $2$, and there is a real possibility that the agent remains stuck regardless of what the agent decides to do (_systematically_) on squares 1 and 2.
+
+<p align="center"><img src="readme_assets/bicycle_illustration.png", width=250><br/><i>A possible initial state for the bicycle (agent), with squares 1 and 2 being identical from the point of view of the agent.</i></p>
+
+
+<p align="center"><img src="readme_assets/bicycle_illustration_left.png", width=250,><img src="readme_assets/bicycle_illustration_right.png", width=250><br /> <i>Case where the best action of the trained model is determined to be going left (or right), and we start a new episode at the left (or right) of the room. The agent is stuck in both cases.</i></p>
+
+One idea to solve the issue would be to compute _probabilities_ to make decisions based on a given state, instead of giving them a score. We would then need a method to modify these probabilities based on the future rewards that these decisions lead to. In that case, we can hope that the trained model agent have a 50/50 probability of going left or right when they are on squares $1$ and $2$.
+
+A 'simple' -- everything is relative -- implementation of this idea is the [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit4/policy-gradient#the-reinforce-algorithm-monte-carlo-reinforce) algorithm. We have decided to implement a slightly more complex algorithm, called _Advantage Actor Critic_ that solves a few issues with [_REINFORCE_](https://huggingface.co/learn/deep-rl-course/en/unit6/variance-problem).
+
+#### Principle of the A2C
+
+The **A2C** algorithm uses _two_ neural networks:
+
+1. The **actor network** is tasked with making decisions based on an observation. Basically they are in charge of $\pi(s)$ 
+2. The **critic** is tasked with judging the actions of the actor. They could be in charge, for instance, of estimating the action value $Q^{\rm est}(s,a)$, but in the implementation the advantage $A$ is chosen instead. It is defined as : 
+
+$$A(s,a) = Q(s,a) - V(s)$$
+
+The _advantage_ then measures how much better it is to make a particular action $a$ when the agent is in state $s$. I am not an expert in RL, but apparently it helps _stabilize_ the training process to choose $A$ instead of directly $Q$.
 
 
 ### Proximal Policy Optimization (PPO)
 
+### Help ! People talk about on and off-policy, policy-based and model-based
+
+There is no point repeating a clear explanation, so I will just leave you with the [excellent explanation of Tomasz Bartkowiak on StackExchange](https://stats.stackexchange.com/questions/407230/what-is-the-difference-between-policy-based-on-policy-value-based-off-policy).
 
 ## Setup
 

@@ -4,3 +4,4 @@
 *.mp4
 __pycache__
 models/
+tests/
