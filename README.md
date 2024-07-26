@@ -314,9 +314,9 @@ Naturally, when the sign of $A$ is reversed, we have to do the opposite, and dec
 
 $$\mathcal{L}^{\rm PPO} = {\rm max} \left [- \Upsilon A^{\rm est}, - \overline{\Upsilon} _ \epsilon A^{\rm est} \right ] $$
 
-Note that I use the _opposite_ of the objective function used in most texts :  $\mathcal{L}^{\rm PPO} = - \mathcal{L}^{\rm CLIP}$. I have also defined the _$\epsilon$-clipped_ version of $\Upsilon$ as follows :
+Note that I use the _opposite_ of the objective function used in most texts :  $\mathcal{L}^{\rm PPO} = - \mathcal{L}^{\rm CLIP}$. I have also defined the $\epsilon$-clipped version of $\Upsilon$ as follows :
 
-$$\begin{array}{rll}  \overline{\Upsilon} _ \epsilon &= 1 - \epsilon &\text{ for } \Upsilon \leq 1 - \epsilon \\ \overline{\Upsilon} _ \epsilon &= \Upsilon & \text{ for }  1 - \epsilon  < \Upsilon < 1 + \epsilon \\ \overline{\Upsilon} _ \epsilon &= 1 + \epsilon &\text{ for } \Upsilon \geq 1 + \epsilon \end{array}$$
+$$\begin{array}{rll}  \overline{\Upsilon} _ \epsilon &= 1 - \epsilon &\text{ for } \Upsilon \leq 1 - \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= \Upsilon & \text{ for }  1 - \epsilon  < \Upsilon < 1 + \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= 1 + \epsilon &\text{ for } \Upsilon \geq 1 + \epsilon \end{array}$$
 
 #### Dealing with the critic in PPO
 
