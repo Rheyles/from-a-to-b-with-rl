@@ -139,13 +139,8 @@ class FrozenDQNAgentBase(DQNAgent):
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, best_action_values.unsqueeze(1))
         self.losses.append(float(loss))
-
-         #Plotting
-        if self.steps_done % DISPLAY_EVERY == 0:
-            Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards',
-                                          self.episode_rewards,
-                                          per_episode=True)
+        
+        
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -338,13 +333,6 @@ class FrozenDQNAgentObs(FrozenDQNAgentBase):
 
         self.losses.append(float(loss))
 
-        #Plotting
-        if self.steps_done % DISPLAY_EVERY == 0:
-            Plotter().plot_data_gradually('Loss', self.losses)
-            Plotter().plot_data_gradually('Rewards',
-                                          self.episode_rewards,
-                                          rolling=30,
-                                          per_episode=True)
 
         # Optimize the model
         self.optimizer.zero_grad()
