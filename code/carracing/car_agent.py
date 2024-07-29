@@ -11,7 +11,7 @@ from gymnasium.spaces.utils import flatdim
 
 
 from params import *
-from super_agent import DQNAgent, SuperAgent
+from code.common.super_agent import DQNAgent, SuperAgent
 from network import ConvDQN, ConvA2CDiscrete, ConvA2CContinuousActor, ConvA2CContinuousCritic
 from buffer import Transition, TransitionPPO, ReplayMemoryPPO
 from display import Plotter, dqn_diagnostics

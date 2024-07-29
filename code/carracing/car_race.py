@@ -1,7 +1,7 @@
 import gymnasium as gym
 from environment import Environment
 from params import *
-import car_agent as agent
+import code.carrace.car_agent as agent
 
 
 # Initialize Environment

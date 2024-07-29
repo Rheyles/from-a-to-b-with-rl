@@ -1,7 +1,7 @@
 .env
 .envrc
 *.egg-info
-*.mp4
 __pycache__
 models/
 tests/
+results/

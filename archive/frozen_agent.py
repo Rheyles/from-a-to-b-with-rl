@@ -6,7 +6,7 @@ import random
 
 from params import *
 from datetime import datetime
-from super_agent import DQNAgent, SuperAgent
+from code.common.super_agent import DQNAgent, SuperAgent
 from network import LinearDQN, LinearA2C
 from buffer import Transition
 from display import Plotter, dqn_diagnostics

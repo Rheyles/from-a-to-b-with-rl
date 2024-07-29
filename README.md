@@ -1,15 +1,51 @@
-# From A to B with RL !
-
 👋 Hello !
 
-This repository is the two-week project in Data Science of four people
-from `le Wagon` bootcamp in Paris. **Our aim is to adapt Reinforcement Learning algorithms to solve [Gymnasium](https://gymnasium.farama.org/) [environments](#environments)** using [several different algorithms](#algorithms).
+This repository is the two-week project in Data Science of four people from `le Wagon` bootcamp in Paris. **Our aim is to write by hand Reinforcement Learning algorithms to solve [Gymnasium](https://gymnasium.farama.org/) [environments](#environments)** using [several different algorithms](#algorithms). Quick links : 
 
-You can clone this repo, and check for yourself how the algorithms perform. All the instructions are available in the [setup](#setup) section.
+- [Environments](#environments)
+  - [Frozen Lake](#frozen-lake)
+  - [Car Racing](#car-racing)
+  - [Mountain car - only continuous](#mountain-car---only-continuous)
+  - [Lunar Lander](#lunar-lander)
+- [Algorithms](#algorithms)
+  - [Some mathematical definitions](#some-mathematical-definitions)
+  - [Q-learning](#q-learning)
+  - [Deep-Q Networks (DQN)](#deep-q-networks-dqn)
+  - [Advantage Actor Critic (A2C)](#advantage-actor-critic-a2c)
+    - [Limitations of Q-learning based algorithms](#limitations-of-q-learning-based-algorithms)
+    - [Principle of the A2C](#principle-of-the-a2c)
+    - [When to update our networks in A2C](#when-to-update-our-networks-in-a2c)
+  - [Proximal Policy Optimization (PPO)](#proximal-policy-optimization-ppo)
+    - [Quantifying how more likely we are to take an action](#quantifying-how-more-likely-we-are-to-take-an-action)
+    - [Clipping the actor loss to avoid large policy changes](#clipping-the-actor-loss-to-avoid-large-policy-changes)
+    - [Dealing with the critic in PPO](#dealing-with-the-critic-in-ppo)
+    - [When to update our network with PPO](#when-to-update-our-network-with-ppo)
+  - [Help, people talk about on and off-policy, policy-based and model-based agents all the time](#help-people-talk-about-on-and-off-policy-policy-based-and-model-based-agents-all-the-time)
+- [Setup](#setup)
+  - [Vanilla Python](#vanilla-python)
+  - [Pyenv-virtualenv \& direnv](#pyenv-virtualenv--direnv)
+  - [Packages](#packages)
+  - [Notes on GPU acceleration](#notes-on-gpu-acceleration)
+- [Results](#results)
+  - [Results on Frozen Lake](#results-on-frozen-lake)
+    - [DQN, Vanilla case](#dqn-vanilla-case)
+    - [DQN, Observing agent](#dqn-observing-agent)
+    - [DQN, Harder cases with custom reward](#dqn-harder-cases-with-custom-reward)
+  - [Results on Car Racing](#results-on-car-racing)
+    - [DQN, discrete case](#dqn-discrete-case)
+    - [A2C, continuous case](#a2c-continuous-case)
+    - [PPO, continuous case](#ppo-continuous-case)
+  - [Results on MountainCar continuous](#results-on-mountaincar-continuous)
+  - [LunarLander](#lunarlander)
+    - [A2C, discrete case](#a2c-discrete-case)
+    - [A2C, continuous case](#a2c-continuous-case-1)
+    - [PPO, continuous case](#ppo-continuous-case-1)
+
+
 
 ## Environments
 
-### Frozen Lake 🌲
+### Frozen Lake
 
 <p align="center"> <img src="readme_assets/frozen_lake.gif" align="center" width=250 > </p>
 
@@ -20,14 +56,12 @@ In this very simple environment, we have :
 
 Reaching the gift ends an 'episode'. **Falling into one of the frozen lakes triggers the end of an episode too with no reward**. In the original game, the agent state $s$ corresponds to their observation $o$, which means the agent does not know its surroundings.
 
-#### Variants
-
-We have developed two variants of the Frozen Lake environment :
+**Variants : negative rewards, observing agent**. We have developed two variants of the Frozen Lake environment :
 
 - One setting a **negative reward $r = -1$ for falling into the lake**
 - One **allowing the agent to know the _type_ of the squares next to them**
 
-### Car Racing 🏎️
+### Car Racing
 
 <p align="center"> <img src="readme_assets/car_race.gif" align="center" width=400> </p>
 
@@ -37,11 +71,7 @@ In this more complex environment :
 - the possible **actions** are discrete : `idle` (0), `left` (1), `right` (2), `gas` (3) and `brake` (4).
 - the car gets a **negative reward** $r=-0.1$ for each frame** and gets **a positive reward $r\simeq 20$ for each new track tile reached by the car**.
 
-#### Variants
-
-We have always worked in a variant of the original environment, where we choose the observation to be a stack of several successive images (we have chosen 3 images). We did it by hand, before realizing there was a "VectorEnvironment" wrapper doing exactly that very easily 😅: reading the docs saves lives.
-
-The environment also works with **continuous actions** along three axes :
+**Variants : multiple frames** : We have always worked in a variant of the original environment, where we choose the observation to be a stack of several successive images (we have chosen 3 images). We did it by hand, before realizing there was a "VectorEnvironment" wrapper doing exactly that very easily 😅: reading the docs saves lives. The environment also works with **continuous actions** along three axes :
 
 - left/right in the range $[-1, \;1 ]$
 - gas/no gas in the range $[0, \; 1]$
@@ -49,7 +79,7 @@ The environment also works with **continuous actions** along three axes :
 
 Which means you can both accelerate, brake and turn at the same time : a perfect recipe for drifting !
 
-### Mountain car ⛏️
+### Mountain car - only continuous
 
 <p align="center"> <img src="readme_assets/mountain_car_continuous.gif" align="center" width=250> </p>
 
@@ -60,7 +90,7 @@ In this environment :
 * The **rewards** are a bit more subtle : a penalty of $-0.1 F^2$ is applied to prevent the car from applying large forces all the time. An additional reward of $+100$ is applied when the car moves past the flag. 
 * **Termination** occurs when the flag is reached, or when $1000$ steps are accomplished.
 
-### Lunar Lander 🛰️
+### Lunar Lander
 
 <p align="center"> <img src="readme_assets/lunar_lander.gif" align="center" width=350> </p>
 
@@ -76,9 +106,7 @@ In this environment :
 * The lander starts at the centre of the "viewport", but a random initial force it applied onto it. 
 * **Termination** occurs when the lander crashes, gets outside of the field of view, or reaches "not awake" states. 
 
-#### Variant
-
-It is possible, as in [Car Racing](#car-racing-️), to make a _continuous_ variant of this environment, in which case we get two actions, one for the main engine (from -1 to 1) and one for the side engines (again from -1 to 1). [As mentioned in the official docs](https://gymnasium.farama.org/environments/box2d/lunar_lander/#arguments), the sign of the side engine action will determine _which_ lateral booster is used. 
+**Continuous variant**: It is possible, as in [Car Racing](#car-racing-️), to make a _continuous_ variant of this environment, in which case we get two actions, one for the main engine (from -1 to 1) and one for the side engines (again from -1 to 1). [As mentioned in the official docs](https://gymnasium.farama.org/environments/box2d/lunar_lander/#arguments), the sign of the side engine action will determine _which_ lateral booster is used. 
 
 ## Algorithms
 
@@ -244,19 +272,13 @@ A 'simple' -- everything is relative -- implementation of this idea is the [_REI
 
 The **A2C** algorithm uses _two_ neural networks, an _actor_ network that makes decitions and a _critic_ network that judges them.
 
-#####  The **actor network** 
-
-It is tasked with making decisions based on the agent observations $o$. We can say it is the part of the algorithm in charge of $\pi(s)$. In this case, the $\pi(s)$ will represent the _probability distribution_ of taking the possible actions $a$. We will write it as $\pi(s,a)$ in this section. For discrete actions, we will have finite probabilities $0 < p(a) < 1$ for every action. For continuous actions, $\pi(s,a)$ will be a continuous probability density function (e.g. a normal distribution). 
+The **actor network** is tasked with making decisions based on the agent observations $o$. We can say it is the part of the algorithm in charge of $\pi(s)$. In this case, the $\pi(s)$ will represent the _probability distribution_ of taking the possible actions $a$. We will write it as $\pi(s,a)$ in this section. For discrete actions, we will have finite probabilities $0 < p(a) < 1$ for every action. For continuous actions, $\pi(s,a)$ will be a continuous probability density function (e.g. a normal distribution). 
   
-##### The **critic** network 
-
-It is tasked with judging the actions of the actor. They could be in charge, for instance, of estimating the action value $Q^{\rm est}(s,a)$ of the actions, but in the implementation the advantage $A$ is chosen instead. It is defined as : 
+The **critic** network is tasked with judging the actions of the actor. They could be in charge, for instance, of estimating the action value $Q^{\rm est}(s,a)$ of the actions, but in the implementation the advantage $A$ is chosen instead. It is defined as : 
 
 $$A(s,a) = Q(s,a) - V(s) = r + \gamma V(s') - V(s)$$
 
 Here, the state $s'$ results from taking the action $a$ from the previous state $s$. The _advantage_ then measures how much better it is to make a particular action $a$ when the agent is in state $s$ compared to an 'average' action. I am not an expert in Reinforcement Learning, but apparently it helps _reduce the variance and stabilize_ the training process to choose $A$ compared to using $Q$. 
-
-##### Optimizing the two networks 
 
 How does the actor improve itself ? And how can the critic improve at all ?!? Two excellent questions ! **The actor will update the weights of its model, so the weights of $\pi(s)$, based on the input from the critic**. Basically, it will try to maximise the following function : 
 
@@ -278,7 +300,7 @@ $$ \mathcal{L}_{\rm critic} = \gamma \left \vert r _ {t+1} + \gamma V^{\rm est} 
 
 So our loss is essentially the square of the advantage $A^{\rm est}$, here for $t+1$ and with an additional factor $\gamma$. The latter is not really relevant to us, since multiplying a function by a constant will not change the location of its minimum. **The actual loss is computed from the advantage at time $t$ instead of $t+1$**, but the main principle behind it remains the same. The formula above also tells us that we _no longer need to compute_ estimated $Q$ values, so we can actually work around the issue of having too many model outputs !
 
-#### When are we updating our networks in A2C ?
+#### When to update our networks in A2C
 
 With the formula we currently use for the advantage $A(s,a)$, we can update the critic network at every step of an episode, which is very convenient when episodes can last infinitely long ; plus, we make sure that every step has the same _a priori_ weight.
 
@@ -288,7 +310,7 @@ We can however decide to update the network _at the end of every episode_ only. 
 
 You would think that after all these improvements and tweaks, _any_ problem would be easily solvable using an A2C model. Once again, researchers stumbled upon issues, this time related to large policy updates. If the critic loss or the actor loss is massive, e.g. because of an unexpected large positive or negative reward, the corresponding policy change will also be dramatic, unless you choose a very low learning rate ; but in that case, you will basically learn nothing until you hit that large reward again. So how do we solve that ? Two main ideas have been floated around, the first being the [Trust-Region Policy Optimization](https://spinningup.openai.com/en/latest/algorithms/trpo.html#background), and **Proximal Policy Optimization**. 
 
-#### Quantifying how "more likely" we are taking an action
+#### Quantifying how more likely we are to take an action
 
 Remember the actor loss in the A2C algorithm -- the inverse of its gain $\mathcal{G} _ {actor}$ :
 
@@ -326,11 +348,11 @@ $$\mathcal{L}^{\rm critic} =   \left [\sum _ {k = t} ^ T r _ {k} \gamma^{k - t} 
 
 We cannot have access to the sum _unless_, as we said, we have some memory of the states that have been accessed, the rewards that have been collected. We cannot update the model at every step like A2C because of this, and also -- as mentioned above -- because we have to compare $\pi (s,a)$ and $\pi ^ {\rm old} (s,a)$. 
 
-#### So ... _when_ are we updating our network ?
+#### When to update our network with PPO
 
 That is an excellent question. Also ... with what data ? In PPO, we  collect a sequence of data (it can span over multiple episodes), and we  divide it into mini-batches. We then train our network on these minibatches _several times_ (several epochs), so our model policy $\pi(s,a)$ progressively diverges from $\pi ^ {\rm old} (s,a)$. But it does not diverge too fast from it since we have cleverly clipped our loss (or objective function).
 
-### Help ! People talk about on and off-policy, policy-based and model-based agents. What do they mean ?
+### Help, people talk about on and off-policy, policy-based and model-based agents all the time
 
 There is no point repeating a clear explanation, so I will just leave you with the [excellent explanation of Tomasz Bartkowiak on StackExchange](https://stats.stackexchange.com/questions/407230/what-is-the-difference-between-policy-based-on-policy-value-based-off-policy).
 To summarise the networks we have seen so far, our implementation of
@@ -400,15 +422,15 @@ The `rl` virtual environment has a few dependencies, notably :
 - [pygame](https://www.pygame.org/news)
 - [moviepy](https://pypi.org/project/moviepy/) to save video from the agent interacting with the environment
 - [matplotlib](https://matplotlib.org/) because we ultimately want graphs
-- [swig] to wrap some C/C++ code with Python
-- [box2d] to run some of the environments. We install it with a few additional options since otherwise it was just not installing on some of our machines. 
+- [swig](https://swig.org/) to wrap some C/C++ code with Python
+- [box2d](https://github.com/pybox2d/pybox2d) to run some of the environments. We install it with a few additional options since otherwise it was just not installing on some of our machines. 
 
 You can then decide to install the package itself (XXX
 Note, for now, nothing interesting is installed except from the dependencies XXX):
 
 ```
   pip install .
-````
+```
 
 Or just decide to install the `requirements.txt` file :
 
@@ -416,7 +438,7 @@ Or just decide to install the `requirements.txt` file :
   pip install -r requirements.txt
 ```
 
-### Notes on GPU acceleration :
+### Notes on GPU acceleration
 
 If your GPU is CUDA capable, you will have to adapt your `rl` environment. If you are on Windows, you can type :
 
@@ -439,3 +461,35 @@ If you want to monitor the GPU in the terminal, you can type
 ```
   nvidia-smi -l 1
 ```
+
+## Results
+
+### Results on Frozen Lake
+
+#### DQN, Vanilla case
+
+Our agent easily solved the damn thang.
+
+#### DQN, Observing agent
+
+#### DQN, Harder cases with custom reward 
+
+### Results on Car Racing
+
+#### DQN, discrete case
+
+#### A2C, continuous case
+
+#### PPO, continuous case
+
+### Results on MountainCar continuous
+
+Here we only tried A2C.
+
+### LunarLander
+
+#### A2C, discrete case
+
+#### A2C, continuous case
+
+#### PPO, continuous case
