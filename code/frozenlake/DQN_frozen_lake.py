@@ -49,10 +49,10 @@ class DQNNetwork(nn.Module):
 
         self.linear1 = nn.Linear(num_inputs, size) 
         self.linear2 = nn.Linear(size, size) 
-        self.linear3 = nn.Linear(size, num_actions) 
+        self.linear3 = nn.Linear(size, num_actions)
         
     def forward(self, x) -> torch.Tensor:
-       
+
         x = F.relu(self.linear1(x))
         x = F.relu(self.linear2(x))
         return self.linear3(x)
@@ -82,6 +82,10 @@ class DQNAgent():
         self.update_strategy = DQN_NETWORK_REFRESH_STRATEGY
         self.optimizer = torch.optim.RMSprop(params=self.policy_net.parameters(), lr=DQN_LR, weight_decay=DQN_L2)
 
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max', factor= 0.7, min_lr = 1e-4, patience=500)
+
         self.memory = ReplayMemory()
         self.last_action = None
         self.global_steps = 0 # Will be useful to compute epsilon
@@ -101,7 +105,6 @@ class DQNAgent():
         """
 
         sample = random.random()
-        action = self.action_space.sample()
         self.epsilon = DQN_EPS_END + (DQN_EPS_START - DQN_EPS_END) * np.exp(-self.global_steps / DQN_EPS_DECAY)
         
         if sample > self.epsilon or deterministic:
@@ -112,6 +115,8 @@ class DQNAgent():
                 # found, so we pick action with the larger expected reward.
                 state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
                 action = self.policy_net.forward(state).argmax(0).item()
+        else: 
+            action = self.action_space.sample()
 
         return action
 
@@ -119,7 +124,7 @@ class DQNAgent():
         """
         This function runs the optimization of the model:
         it takes a batch from the buffer, creates the non final mask and computes:
-        Q(s_t, a) and V(s_{t+1}) to compute the Loss, performs backprop and then clips gradient
+        Q(s_t, a) and V(s_{t+1}) to compute the Loss, performs backprop and
         returns the computed loss
 
         Args:
@@ -135,9 +140,9 @@ class DQNAgent():
         state_batch = torch.tensor(np.array(batch.state), dtype=torch.float32).unsqueeze(-1)
         next_state_batch = torch.tensor(np.array(batch.next_state), dtype=torch.float32).unsqueeze(-1)
         action_batch = torch.tensor(np.array(batch.action), dtype=torch.int64).unsqueeze(-1)
-        reward_batch = torch.tensor(np.array(batch.reward), dtype=torch.float32).unsqueeze(-1)
-        term_batch = torch.tensor(np.array(batch.terminated), dtype=torch.float32).unsqueeze(-1)
-
+        reward_batch = torch.tensor(np.array(batch.reward), dtype=torch.int64).unsqueeze(-1)
+        term_batch = torch.tensor(np.array(batch.terminated), dtype=torch.bool).unsqueeze(-1)
+        not_term_batch = torch.logical_not(term_batch)
 
         ### Updating the POLICY network based on the LOSS
         # We compute Q(s_t, a) for the actions taken in the batch 
@@ -146,44 +151,16 @@ class DQNAgent():
         Q_state_action = self.policy_net.forward(state_batch).gather(1, action_batch)
 
         with torch.no_grad():    
-            candidate_state_values = reward_batch + self.target_net.forward(next_state_batch) * (1 - term_batch) * GAMMA 
-            V_future_state = torch.max(candidate_state_values, dim=1, keepdim=True).values
-            
-            # if any(reward_batch):
-            #     data = np.hstack((state_batch.detach(), action_batch.detach(), next_state_batch.detach(), reward_batch.detach(), done_batch.detach(), Q_state_action.detach(), V_future_state.detach()))
-            #     import time
-                
-            #     print(candidate_state_values)
-
-            #     print('Before')
-            #     print('\n')
-            #     print(data.round(2).T)
-            #     print('\n')
-            
+            candidate_state_values = reward_batch + self.target_net.forward(next_state_batch) *  GAMMA * not_term_batch 
+            V_future_state = torch.max(candidate_state_values, dim=1, keepdim=True).values            
 
         # Compute Loss (Huber)
-        loss = torch.sum(Q_state_action - V_future_state) ** 2
-
+        loss = nn.SmoothL1Loss()(Q_state_action, V_future_state)
+        
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-        # with torch.no_grad():
-        #     Q_state_action = self.policy_net.forward(state_batch).gather(1, action_batch)
-        #     candidate_state_values = reward_batch + self.target_net.forward(next_state_batch) * (1 - done_batch) * GAMMA 
-        #     V_future_state = torch.max(candidate_state_values, dim=1, keepdim=True).values
-            
-        #     if any(reward_batch):
-        #         data = np.hstack((state_batch.detach(), action_batch.detach(), next_state_batch.detach(), reward_batch.detach(), done_batch.detach(), Q_state_action.detach(), V_future_state.detach()))
-        #         import time
-                
-        #         print('After')
-        #         print('\n')
-        #         print(data.round(2).T)
-        #         print('\n')
-        #         input()
-
 
         ### Updating the TARGET network based on the REFRESH STRATEGY
         target_net_state_dict = self.target_net.state_dict()
@@ -191,7 +168,6 @@ class DQNAgent():
 
         if self.update_strategy == 'soft':
             # Soft update of the target network's weights :  θ′ ← τ θ + (1 −τ )θ′
-
             for key in policy_net_state_dict:
                 target_net_state_dict[key] = policy_net_state_dict[key]*DQN_TAU 
                 + target_net_state_dict[key]*(1-DQN_TAU)
@@ -228,7 +204,7 @@ try:
     for episode in range(NUM_EPISODES):
         
         state, _ = env.reset()
-        cum_reward, loss, step, done, actions = 0, 0, 0, False, []
+        cum_reward, ep_loss, step, done, actions = 0, 0, 0, False, []
 
         while not done:
             # Let the agent act and face the consequences
@@ -240,36 +216,36 @@ try:
 
             # Update thingies
             agent.memory.push(state, action, next_state, reward, terminated)
-            loss += agent.update()
+            ep_loss += agent.update()
             agent.global_steps += 1
             cum_reward += reward
             state = next_state
             step += 1
 
-            
+        lr = agent.scheduler.optimizer.param_groups[0]['lr']    
         steps.append(step)
-        losses.append(loss/step)
+        losses.append(ep_loss/step)
         cum_rewards.append(cum_reward)
 
         if episode % 100 == 0:
             with torch.no_grad():
                 fig, ax = plt.subplots()
-                all_states = torch.arange(0,16, dtype=torch.float32).
+                all_states = torch.arange(0,16, dtype=torch.float32).unsqueeze(-1)
                 all_values = agent.policy_net.forward(all_states)
-                ax.imshow(all_values, cmin=-1, cmax=2)
-                fig.draw()
-                plt.pause(5)
+                ax.imshow(all_values.T, vmin=-1, vmax=2)
+                
+                plt.pause(1)
                 plt.close(fig)
 
         # Write some stuff in a file
         with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
-            myfile.write(f'{episode},{step},{cum_reward},{loss/step}, {agent.epsilon}\n')
+            myfile.write(f'{episode},{step},{cum_reward},{ep_loss/step}, {agent.epsilon}\n')
         
         # Print stuff in console
         bg, colr = Style.RESET_ALL, Fore.GREEN if cum_reward >= 1 else Fore.RED
-        print(f'Ep. {episode:4d} | ' \
+        print(f'Ep. {episode:4d} | GL_STP {agent.global_steps:5d} | ' \
             + colr + f'Rw {cum_reward:2.0f} | Dur {step:3d}' + bg \
-            + f' | AL {loss/step:7.3e} | EPS {agent.epsilon:5.2f} | GL_STP {agent.global_steps:5d}')
+            + f' | AL {ep_loss/step:7.3e} | EPS {agent.epsilon:5.2f} | LR {lr:.2e}')
 
         # If model really good, save it
         if np.mean(cum_rewards[-20:]) > best_model_score:
