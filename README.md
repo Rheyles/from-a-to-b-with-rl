@@ -128,7 +128,7 @@ That function would be a two-dimensional array of size $N_s \times N_a$ in your 
 
 ### Q-learning
 
-I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^* $ leads to the highest state-action value $Q(s,a^*). And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
+I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^ *$ leads to the highest state-action value $Q(s,a^* )$. And we can define a policy $\pi^ *$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
 
 $$\pi^* (s) = {\rm argmax}_a \, Q(s,a)$$
 
