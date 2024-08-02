@@ -80,6 +80,12 @@ class DiscreteActor(nn.Module):
         self.linear3 = nn.Linear(size, self.num_actions)
 
         self.optimizer = optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=l2_alpha)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max', 
+             factor= CRITIC_SCHEDULER_FACTOR, 
+             min_lr = CRITIC_SCHEDULER_MIN_LR, 
+             patience= CRITIC_SCHEDULER_PATIENCE)
     
     def act(self, state:np.ndarray, deterministic=False) -> torch.Tensor:
         """ Selects an action and computes the log probability associated with it
@@ -133,7 +139,6 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         self.gamma = gamma
-        print(env.observation_space.shape)
         self.num_inputs = env.observation_space.shape[0]
         self.linear1 = nn.Linear(self.num_inputs, size)
         self.linear2 = nn.Linear(size, size)
@@ -142,6 +147,12 @@ class Critic(nn.Module):
         self.advantage = None
         self.dropout_rate = dropout_rate
         self.two_nn_layers = two_nn_layers
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max', 
+             factor= ACTOR_SCHEDULER_FACTOR, 
+             min_lr = ACTOR_SCHEDULER_MIN_LR, 
+             patience= ACTOR_SCHEDULER_PATIENCE)
 
     def judge(self, state:np.ndarray) -> torch.Tensor:
         """ Ask the critic to judge a state (estimates the V(s)) and the
@@ -163,7 +174,7 @@ class Critic(nn.Module):
         # Computes the estimator of the discounted rewards through TD
         value, next_value = self.judge(normed_state), self.judge(normed_next_state)
         self.advantage = reward + next_value * self.gamma * (1 - done) - value
-        loss = (self.advantage ** 2)
+        loss = self.advantage ** 2
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -185,13 +196,13 @@ def train():
     critic_net = Critic(env)
 
     # Init some monitoring stuff
-    cum_rewards, c_losses, a_losses, steps = [], [], [], []
+    cum_rewards = []
     best_model_score = -np.inf
 
     try:
         # Init log file
         with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
-            myfile.write(f'episode,step,cum_reward,c_loss,a_loss,left_frac,right_frac\n')
+            myfile.write(f'episode,step,cum_reward,c_loss,a_loss,left_frac,right_frac,actor_lr,critic_lr\n')
 
         # Save hyperparameters now
         print('./models/' + file_prefix + '_prms.json')
@@ -223,24 +234,28 @@ def train():
                 cum_reward += reward
                 actions.append(action)
 
+
+            actor_net.scheduler.step(metrics=cum_reward)
+            critic_net.scheduler.step(metrics=cum_reward)
             act_frac = [actions.count(val)/len(actions) for val in range(env.action_space.n)]
-            steps.append(step)
             cum_rewards.append(cum_reward)
-            c_losses.append(c_loss/step)
-            a_losses.append(a_loss/step)
+            a_lr = actor_net.scheduler.optimizer.param_groups[0]['lr']    
+            c_lr = critic_net.scheduler.optimizer.param_groups[0]['lr']    
 
             # Write some stuff in a file
             with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
-                myfile.write(f'{episode},{step},{cum_reward},{c_loss/step},{a_loss/step},{act_frac[0]},{act_frac[1]}\n')
+                myfile.write(f'{episode},{step},{cum_reward},{c_loss/step},{a_loss/step},{act_frac[0]},{act_frac[1]},{a_lr},{c_lr}\n')
             
             # Print stuff in console
-            bg, colr = Style.RESET_ALL, Fore.GREEN if step >= 499 else Fore.RED
+            bg, colr = Style.RESET_ALL, Fore.GREEN if step >= 499 el Fore.RED
             print(f'Ep. {episode:4d} | ' \
                 + colr + f'Rw {cum_reward:7.2f} | Dur {step:5d}' + bg \
                 + f' | AL {a_loss/step:7.2f}' \
                 + f' | CL {c_loss/step:7.2f}' \
                 + f' | LEFT {act_frac[0]:.3f}' \
-                + f' | RIGHT {act_frac[1]:.3f}')
+                + f' | RIGHT {act_frac[1]:.3f}' \
+                + f' | A_LR {a_lr:5.2e}' \
+                + f' | C_LR {c_lr:5.2e}')
 
             # If model really good, save it
             if np.mean(cum_rewards[-20:]) > best_model_score:
@@ -266,14 +281,16 @@ def evaluate(file='A2C_Cartpole_*', index=-1, mode='human'):
     actor_file = glob.glob('models/' + file + '*best_actor*')[index]
     json_file = glob.glob('models/' + file + '*prms*')[index]
     base_name = '_'.join(json_file.split('_')[:-1])
-    
-    with open(json_file) as myfile:
-        prms = json.load(myfile)
-        for key, val in prms.items():
-            print(f'{key:25s} : {val}')    
-
     env = gym.make('CartPole-v1', render_mode=mode)
 
+    with open(json_file) as myfile:
+        prms = json.load(myfile)
+        
+    print('\n\nOpening file : ' + actor_file)
+    print('-'*40 + '\nHyperparameters')
+    for key, val in prms.items():
+        print(f'{key:>25s} : {val}')    
+    
     if mode != 'human': 
         env = gym.wrappers.RecordVideo(env=env, 
                                     video_folder='',
@@ -287,8 +304,7 @@ def evaluate(file='A2C_Cartpole_*', index=-1, mode='human'):
     actor_net = DiscreteActor(env, size=prms['ACTOR_SIZE'])
     actor_net.load_state_dict(torch.load(actor_file))
 
-    done = False
-    cum_rewards, steps = [], []
+    done, cum_rewards = False
     state, _ = env.reset()
 
     if mode != 'human': 
@@ -308,9 +324,9 @@ def evaluate(file='A2C_Cartpole_*', index=-1, mode='human'):
             state, normed_state = new_state, normed_new_state
             cum_reward += reward
             step += 1
-
+        
         cum_rewards.append(cum_reward)
-        steps.append(step)
+
     
     # Close the environment
     if mode != 'human':

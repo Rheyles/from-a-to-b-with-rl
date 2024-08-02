@@ -1,20 +1,19 @@
 import sys
+import glob
+import json
 import torch  
 import gymnasium as gym
 import numpy as np  
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Normal
-from collections import deque
-import time
-import keyboard
-from colorama import Fore, Back, Style
 
-import matplotlib.pyplot as plt
+from torch.distributions import MultivariateNormal
+from colorama import Fore, Style
+from datetime import datetime
 
-# Constants
-GAMMA = 0.99
+from params_continuous import *
+
 
 class Normalizer():
     """ A class used to (easily) normalize inputs (observations)
@@ -37,237 +36,294 @@ class Normalizer():
         else:
             normed_observation = 2 * (observation - self.low)/(self.high - self.low) - 1
         return normed_observation
+    
 
-
+    
 class ContinuousActor(nn.Module):
-    """ Implements a __continuous__ A2C actor
-    """
-
-    def __init__(self, obs_space:gym.spaces.Box, 
-                 action_space:gym.spaces.Box, 
-                 actor_size=32, 
-                 learning_rate=1e-6):
-        """ NB: action_space should be the limits [[min0, max0], 
-        [min1, max1], ...] of the action space"""
-
+    def __init__(self, env:gym.Env,
+                 size=ACTOR_SIZE, 
+                 learning_rate=ACTOR_LR,
+                 dropout_rate=ACTOR_DROPOUT_RATE,
+                 L2_alpha=ACTOR_L2_ALPHA,
+                 entropy_beta=ACTOR_ENTROPY_BETA):
         
         super(ContinuousActor, self).__init__()
 
-        self.obs_min = torch.Tensor(obs_space.low)
-        self.obs_max = torch.Tensor(obs_space.high)
-        self.num_inputs = obs_space.shape[0]
+        self.num_actions = env.action_space.shape[0]
+        self.num_inputs = env.observation_space.shape[0]
+        self.log_prob = None
+        self.entropy_beta = entropy_beta
 
-        self.action_min = torch.Tensor(action_space.low)
-        self.action_max = torch.Tensor(action_space.high)
-        self.num_actions = action_space.shape[0]
-        self.log_probs = []
+        self.linear1 = nn.Linear(self.num_inputs, size)
+        self.linear2 = nn.Linear(size, size)
+        self.mu = nn.Linear(size, self.num_actions)
+        self.sigma = nn.Linear(size, self.num_actions)
+
+        self.optimizer = optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=L2_alpha)
+        self.dropout_rate = dropout_rate
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max', 
+             factor = ACTOR_SCHEDULER_FACTOR, 
+             min_lr = ACTOR_SCHEDULER_MIN_LR, 
+             patience= ACTOR_SCHEDULER_PATIENCE)
+
+    
+    def act(self, state:np.ndarray, deterministic=False) -> torch.Tensor:
+        """ Selects an action and computes the log probability associated with it
+        Returns the action and stores in the "log_probs" attribute the log_probs.
+        For test / evaluation purposes, you can set the `deterministic` flag to True
+        so that the optimal / likeliest decision is always taken."""
+
+        state = torch.Tensor(state).float().unsqueeze(0)
+        x = F.relu(self.linear1(state))
+        x = F.relu(F.dropout(self.linear2(x), self.dropout_rate))
+        mus = F.hardtanh(self.mu(x)) # Will normalise actions 
+        cov = torch.diagflat(0.01 + F.hardsigmoid(self.sigma(x)))
+
+        distrib = MultivariateNormal(mus,cov)
+        action = distrib.sample() if not deterministic else mus
+        self.log_prob = distrib.log_prob(action)
+        self.entropy = distrib.entropy()
+
+        return np.squeeze(action.detach().numpy()) # Action has now several elements ... and somehow two dimensions.
+    
+    
+    def update(self, critic_advantage : torch.Tensor):
+        """ Updates the actor network based on critic input """
         
-        self.linear1 = nn.Linear(self.num_inputs, actor_size)
-        self.linear2 = nn.Linear(actor_size, actor_size)
-        self.avg = nn.Linear(actor_size, self.num_actions)
-        self.std = nn.Linear(actor_size, self.num_actions)
-
-        self.optimizer = optim.AdamW(self.parameters(), lr=learning_rate)
-
-
-    def act(self, obs:np.ndarray) -> tuple[torch.Tensor, torch.distributions.Normal]:
-        """ Asks the actor network to select an action based on an observation (obs)
-        Returns the action and the probability distribution associated to this action
-        [it is basically the product of the probability of the "individual" action along
-        all the dimensions of the action space]."""
-
-        obs = torch.Tensor(obs)
-        x = F.relu(self.linear1(obs))
-        x = F.relu(self.linear2(x))
-        
-        avgs = self.avg(x) # I do not force anything for the average (the action will be clipped instead)
-        stds = 0.01 + F.softplus(self.std(x)) # Stds only have to be positive --> softplus
-        distrib = Normal(avgs, stds)
-        action = distrib.sample()
-        log_prob = torch.sum(distrib.log_prob(action), axis=-1) 
-        print(log_prob)
-
-        self.log_probs.append(log_prob)
-        action = action.clip(min=self.action_min, max=self.action_max)
- 
-        return action, distrib
-
-    def update(self, critic_advantage:torch.Tensor):
-        """ Updates the actor network based on critic advantage """
-        
-        log_probs = torch.cat(self.log_probs)
+        loss = -self.log_prob * critic_advantage.detach() - self.entropy_beta * self.entropy
         self.optimizer.zero_grad()
-        loss = - log_probs * critic_advantage.detach()    # We don't update the parameters of the critic
         loss.backward()
         self.optimizer.step()
-
         return loss.item()
 
 
 class Critic(nn.Module):
-    def __init__(self, obs_space:gym.spaces.Box,  
-                 critic_size=32, 
-                 learning_rate=1e-4,
-                 gamma=0.99):
+    def __init__(self, env:gym.Env,  
+                size=CRITIC_SIZE, 
+                learning_rate=CRITIC_LR,
+                gamma=GAMMA,
+                dropout_rate=CRITIC_DROPOUT_RATE,
+                l2_alpha=CRITIC_L2_ALPHA):
         """ Critic part of the A2C agent. Can use a different 
         learning rate (usually higher than actor ?) and a different
-        network size"""
+        network size. Also a dropout_rate and a L2 regularization coefficient."""
 
-        super(Critic, self).__init__()
         
-        self.obs_min = torch.Tensor(obs_space.low)
-        self.obs_max = torch.Tensor(obs_space.high)
-        self.num_inputs = obs_space.shape[0]
-        self.advantage = None
+        super(Critic, self).__init__()
 
-        self.linear1 = nn.Linear(self.num_inputs, critic_size)
-        self.linear2 = nn.Linear(critic_size, critic_size)
-        self.linear3 = nn.Linear(critic_size, 1)
-
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
         self.gamma = gamma
+        self.num_inputs = env.observation_space.shape[0]
+        self.linear1 = nn.Linear(self.num_inputs, size)
+        self.linear2 = nn.Linear(size, size)
+        self.linear3 = nn.Linear(size, 1)
+        self.optimizer = optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=l2_alpha)
+        self.advantage = None
+        self.dropout_rate = dropout_rate
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau\
+            (optimizer=self.optimizer,
+             mode='max', 
+             factor = CRITIC_SCHEDULER_FACTOR, 
+             min_lr = CRITIC_SCHEDULER_MIN_LR, 
+             patience= CRITIC_SCHEDULER_PATIENCE)
 
 
-    def judge(self, obs:np.ndarray) -> torch.Tensor:
+    def judge(self, state:np.ndarray) -> torch.Tensor:
         """ Ask the critic to judge a state (estimates the V(s)) and the
-        next state (estimates the V(s'))."""
+        next state (estimates the V(s')). You can specify if the episode
+        is terminated, in which case the value will automatically be
+        set to 0 """
+        
+        state = torch.Tensor(state).unsqueeze(0)
+        x = F.relu(self.linear1(state))
+        x = F.relu(F.dropout(self.linear2(x), p=self.dropout_rate))
+        return self.linear3(x)
 
-        obs = torch.Tensor(obs)
-        x = F.elu(self.linear1(obs))
-        x = F.elu(self.linear2(x))
-        out = self.linear3(x)
-
-        return out
-    
-
-    def update(self, state: np.ndarray, new_state: np.ndarray, reward:float, done:bool):
-        """ Computes the advantage of the current state
+    def update(self, rewards, normed_state, normed_next_state, done:bool):
+        """ Computes the advantage of the previous batch
         and uses it to improve itself"""
 
-        # Computes the discounted rewards
-
-        self.advantage = reward + (1 - done) * self.gamma * self.judge(new_state) \
-                            - self.judge(state)
+        # Computes the estimator of the discounted rewards through TD
+        value, next_value = self.judge(normed_state), self.judge(normed_next_state)
+        self.advantage = rewards + next_value * self.gamma * (1 - done) - value
         loss = self.advantage ** 2
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
+        
         return loss.item()
 
 
-def evaluate(actor_file='trained_actor_continuous.pkl'):
-    env = gym.make('LunarLander-v2', continuous=True, render_mode='human')
-    state, _ = env.reset()
 
-    actor_net = ContinuousActor(obs_space = env.observation_space, 
-                               action_space = env.action_space, 
-                               actor_size = 32)
+
+
+def train(n_episodes = NUM_EPISODES):
     
-    normalizer = Normalizer(obs_space=env.observation_space)
+    file_prefix = 'A2C_LunarLanderContinuous_' + datetime.now().strftime('%y-%m-%d_%H-%M')
+    env = gym.make('LunarLander-v2', continuous=True, render_mode='rgb_array')
+    actor_net = ContinuousActor(env)
+    critic_net = Critic(env)
+    normalizer = Normalizer(obs_space=env.observation_space, mode='minmax')
 
+    # Init some monitoring stuff
+    cum_rewards = []
+    best_model_score = -np.inf
+    
+    # Init log file
+    with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
+        myfile.write(f'episode,step,cum_reward,c_loss,a_loss,action_0,action_1,actor_lr,critic_lr\n')
+
+    # Save hyperparameters now
+    with open('models/' + file_prefix + '_prms.json', 'w') as myfile:
+        import params_continuous as pm
+        prm_dict = {key : val for key, val in pm.__dict__.items() if '__' not in key}
+        json.dump(prm_dict, myfile)
+
+
+    try:
+        for episode in range(n_episodes):
+            state, _ = env.reset()
+            normed_state = normalizer.normalize_obs(state)
+            done, step = False, 0
+            actions, cum_reward = [], 0
+            actor_loss, critic_loss = 0, 0
+
+            while not done:
+
+                action = actor_net.act(normed_state)
+                new_state, reward, terminated, truncated, _ = env.step(action)
+                normed_new_state = normalizer.normalize_obs(new_state)
+                done = terminated or truncated
+              
+                # Updating networks
+                c_loss = critic_net.update(reward, normed_state, normed_new_state, done)
+                a_loss = actor_net.update(critic_advantage=critic_net.advantage)
+
+                # Updating variables
+                actor_loss += a_loss
+                critic_loss += c_loss
+                cum_reward += reward
+                state = new_state
+                normed_state = normed_new_state
+                actions.append(action)
+                step += 1
+            
+            act_avg = np.mean(np.vstack(actions), axis=0)            
+            actor_net.scheduler.step(metrics=cum_reward)
+            critic_net.scheduler.step(metrics=cum_reward)
+            a_lr = actor_net.scheduler.optimizer.param_groups[0]['lr']    
+            c_lr = critic_net.scheduler.optimizer.param_groups[0]['lr']
+            cum_rewards.append(cum_reward)    
+            
+            # Fancier colors
+            bg, colr = Style.RESET_ALL, Fore.RED
+            if cum_reward > 0:
+                colr = Fore.YELLOW
+            if cum_reward > 100:
+                colr = Fore.BLUE
+            if cum_reward > 200:
+                colr = Fore.GREEN
+
+            print(f'Ep. {episode:4d} | ' \
+                + colr + f'Rw {cum_reward:+8.2f} | Dur {step:4d}' + bg \
+                + f' | AL {a_loss/step:7.2f}' \
+                + f' | CL {c_loss/step:7.2f}' \
+                + f' | ACT0 {act_avg[0]:+6.3f}' \
+                + f' | ACT1 {act_avg[1]:+6.3f}' \
+                + f' | A_LR {a_lr:5.2e}' \
+                + f' | C_LR {c_lr:5.2e}')
+
+            # Write some stuff in a file
+            with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
+                myfile.write(f'{episode},{step},{cum_reward},{c_loss/step},{a_loss/step},{act_avg[0]},{act_avg[1]},{a_lr},{c_lr}\n')
+            
+            if len(cum_rewards) > 20 and np.mean(cum_rewards[-20:]) > 200:
+                print(f'Exceeded 200 in average for 20 episodes. Early stopping')
+                break
+
+            # If model really good, save it
+            if (len(cum_rewards) > 20) and (np.mean(cum_rewards[-20:]) > best_model_score):
+                torch.save(actor_net.state_dict() , './models/' + file_prefix + '_best_actor.pkl')  
+                torch.save(critic_net.state_dict(), './models/' + file_prefix + '_best_critic.pkl')
+                best_model_score = np.mean(cum_rewards[-20:])
+
+    except KeyboardInterrupt: 
+        pass
+
+    finally:
+        print('Saving models ...')
+        # torch.save(actor_net.state_dict(), 'trained_actor.pkl')  
+        # torch.save(critic_net.state_dict(), 'trained_critic.pkl')
+
+
+
+
+
+
+def evaluate(file='A2C_LunarLanderContinuous_*', index=-1, mode='human'):
+    """ Evaluates a trained model (default : the best version of the last trained model)"""
+
+    actor_file = glob.glob('models/' + file + '*best_actor*')[index]
+    json_file = glob.glob('models/' + file + '*prms*')[index]
+    base_name = '_'.join(json_file.split('_')[:-1])
+    env = gym.make('LunarLander-v2', continuous=True, render_mode=mode)
+
+    with open(json_file) as myfile:
+        prms = json.load(myfile)
+        
+    print('\n\nOpening file : ' + actor_file)
+    print('-'*40 + '\nHyperparameters')
+    for key, val in prms.items():
+        print(f'{key:>25s} : {val}')    
+    
+    if mode != 'human': 
+        env = gym.wrappers.RecordVideo(env=env, 
+                                    video_folder='',
+                                    name_prefix=base_name,
+                                    episode_trigger=lambda x: True)
+
+    normalizer = Normalizer(obs_space=env.observation_space, mode='minmax')
+    actor_net = ContinuousActor(env, size=prms['ACTOR_SIZE'])
     actor_net.load_state_dict(torch.load(actor_file))
 
-    done = False
-    rewards, steps = 0, 0
-    
-    while not done:
-        env.render()
-        action, distrib = actor_net.act(normalizer.normalize_obs(state))
-        new_state, reward, terminated, truncated, _ = env.step(action.detach().numpy())
-        done = terminated or truncated
-        
-        state = new_state
-        rewards += reward
-        steps += 1
+    done, cum_rewards = False, []
+    state, _ = env.reset()
 
-    print(f'Final : {steps} steps, {rewards} rewards')    
-
-def train():
+    if mode != 'human': 
+        env.start_video_recorder()
     
-    env = gym.envs.make('LunarLander-v2', continuous=True, render_mode='rgb_array')
-    env.metadata['render_fps'] = 150
-    actor_net = ContinuousActor(obs_space=env.observation_space, 
-                            action_space=env.action_space,
-                            learning_rate=3e-4)
-    
-    critic_net = Critic(obs_space=env.observation_space,
-                        learning_rate=1e-4)
-    
-    normalizer = Normalizer(obs_space=env.observation_space, mode='minmax')
-    
-    max_episode_num = 500
-    all_rewards = []
-    duration = []
-    actor_loss = []
-    critic_loss = []
-
-    for episode in range(max_episode_num):
+    for episode in range(5):
+        cum_reward, step, done = 0, 0, False
         state, _ = env.reset()
-        step, cum_reward, done = 0, 0, False
-
+        normed_state = normalizer.normalize_obs(state)
+        
         while not done:
-            
-            # env.render()
-            
-            state_normed = normalizer.normalize_obs(state)
-            action, distrib = actor_net.act(state_normed)
-
-            new_state, reward, terminated, truncated, _ = env.step(action.detach().numpy())
-            new_state_normed = normalizer.normalize_obs(new_state)
+            env.render()
+            action = actor_net.act(normed_state, deterministic=True)
+            new_state, reward, terminated, truncated, _ = env.step(action)
+            normed_new_state = normalizer.normalize_obs(new_state)
             done = terminated or truncated
-        
-            c_loss = critic_net.update(state_normed, new_state_normed, reward, done)
-            a_loss = actor_net.update(critic_advantage=critic_net.advantage)
-
-            state = new_state
-            step += 1
+            state, normed_state = new_state, normed_new_state
             cum_reward += reward
-            
-            action_lst = action.tolist()
-            loc_lst = distrib.loc.tolist()
-            std_lst = distrib.scale.tolist()
-            
-            print(f'\r ep {episode:3d}, stp {step:3d} |'\
-                + f' main {action_lst[0]:+.2f} ({loc_lst[0]:+.2f} +- {std_lst[0]:.2f})' \
-                + f' lat  {action_lst[1]:+.2f} ({loc_lst[1]:+.2f} +- {std_lst[1]:.2f}) | ', end='')
-            
-            if keyboard.is_pressed('l'):
-                time.sleep(0.25)
-
-        all_rewards.append(cum_reward)
-        duration.append(step)
-        actor_loss.append(a_loss)
-        critic_loss.append(c_loss)
-
+            step += 1
         
-        if all_rewards[-1] > 0:
-            print(Fore.GREEN + f" rwd: {all_rewards[-1]:+7.1f}", end='')
-        else: 
-            print(Fore.RED + f" rwd: {all_rewards[-1]:+7.1f}", end='')
-
-        print(Fore.WHITE + f' | c_loss {c_loss:.2f} a_loss {a_loss:+7.1f}')
-
-            
-    torch.save(actor_net.state_dict(), 'trained_actor_continuous.pkl')  
-    torch.save(critic_net.state_dict(), 'trained_critic_continuous.pkl')
-
+        cum_rewards.append(cum_reward)
     
-    avg_rewards = np.convolve(all_rewards, 0.1*np.ones(10), mode="same")
-    fig, ax = plt.subplots(nrows=3, sharex=True)
-    ax[0].plot(all_rewards, color='lightsalmon', label='rewards (inst.)')
-    ax[0].plot(avg_rewards, 'r', label='rewards (avg)')
-    ax[0].legend()
-    ax[1].plot(duration, 'b', label='duration')
-    ax[1].legend()
-    ax[2].plot(actor_loss, color='purple', label='actor loss')
-    ax[2].plot(critic_loss, color='orange', label='critic loss')
-    ax[2].legend()
-    plt.xlabel('Episode')
-    plt.show()
+    # Close the environment
+    if mode != 'human':
+        env.close_video_recorder()
+        env.close()
+
+    print(f'5 episodes : Rewards {cum_rewards}')    
 
 
 if __name__ == '__main__':
-    # train()
-    evaluate()
+    if len(sys.argv) > 1 and ('--eval' in sys.argv[1] or '-e' in sys.argv[1]):
+        if len(sys.argv) > 2 and '--video' in sys.argv[2]:
+            evaluate(mode='rgb_array')
+        else: 
+            evaluate(mode='human')
+    else:
+        train()

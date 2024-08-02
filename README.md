@@ -156,9 +156,9 @@ That function would be a two-dimensional array of size $N_s \times N_a$ in your 
 
 ### Q-learning
 
-I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^* $ leads to the highest state-action value $Q(s,a^*). And we can define a policy $\pi^*$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
+I think the critical question at this stage is : **how does computing Q-values help us teach an agent how to play games ?**. Let's assume that the $Q$ values _accurately_ represent the _true_ future rewards the agent will obtain in their episode. We can check, for every state, which action $a^\star$ leads to the highest state-action value $Q(s,a^\star)$. And we can define a policy $\pi^\star$ to choose these 'optimal decisions' for every state $s$. Unsurprisingly, this policy is the _optimal_ policy. Mathematically, we write it as:
 
-$$\pi^* (s) = {\rm argmax}_a \, Q(s,a)$$
+$$\pi^\star (s) = {\rm argmax}_a \, Q(s,a)$$
 
 The main issue is that **we do not know initially the _true_ state action values $Q(s,a)$**,
 and we do not know which states and which actions lead to rewards! We have to build everything from scratch. How do we do that? Let's suppose the initial $Q^{\rm est}(s,a)$ table is initialized
@@ -292,11 +292,11 @@ $$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma Q^{\rm est}(s _{t+1},a _{
 
 When we minimise that loss, we become _better_ at predicting the reward we get, since we are continuously 'injecting some truth' (the $r_t$) into it. Let's consider a series of actions and rewards $(a_t, r_t)$ and rewrite our loss in terms of $V^{\rm est}$ : 
 
-$$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma \left [ r_ {t+1} + \gamma V^{\rm est}(s _{t+2}) \right ] - r_t - \gamma V^{\rm est}(s _ {t+1}) \right \vert ^2  $$
+$$ \mathcal{L} _ {\rm critic} = \left \vert r _ t + \gamma \left [ r_ {t+1} + \gamma V^{\rm est}(s _{t+2}) \right ] - r_t - \gamma V^{\rm est}(s _ {t+1}) \right \vert ^2  $$
 
 Rearranging some elements, we end up with :
 
-$$ \mathcal{L}_{\rm critic} = \gamma \left \vert r _ {t+1} + \gamma V^{\rm est} (s _ {t+2}) - V^{\rm est} (s _ {t+1})\right \vert ^2 \simeq \gamma \left [A(s _ {t+1}, a _ {t+1}) \right ]^2$$
+$$ \mathcal{L} _ {\rm critic} = \gamma \left \vert r _ {t+1} + \gamma V^{\rm est} (s _ {t+2}) - V^{\rm est} (s _ {t+1})\right \vert ^2 \simeq \gamma \left [A(s _ {t+1}, a _ {t+1}) \right ]^2$$
 
 So our loss is essentially the square of the advantage $A^{\rm est}$, here for $t+1$ and with an additional factor $\gamma$. The latter is not really relevant to us, since multiplying a function by a constant will not change the location of its minimum. **The actual loss is computed from the advantage at time $t$ instead of $t+1$**, but the main principle behind it remains the same. The formula above also tells us that we _no longer need to compute_ estimated $Q$ values, so we can actually work around the issue of having too many model outputs !
 
