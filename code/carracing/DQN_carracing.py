@@ -79,7 +79,10 @@ class ConvDQN(nn.Module):
 
 
 class DQNAgent():
-    def __init__(self, env:gym.Env, n_filters=N_FILTERS, n_idle=N_IDLE, n_imgs=N_IMGS) -> None:
+    def __init__(self, env:gym.Env, 
+                 n_filters=N_FILTERS, 
+                 n_idle=N_IDLE, 
+                 n_imgs=N_IMGS) -> None:
         """
         Creates the DQN Agent, with its two networks (policy and target)
         that will kind of 'chase each other' and converge to faithfully
@@ -141,13 +144,13 @@ class DQNAgent():
         
         next_state, cum_reward, terminated, truncated, _ = env.step(action)
 
-        for step in range(self.n_idle-1):
+        for idle in range(1, self.n_idle):
             if terminated or truncated:
                 break
             next_state, reward, terminated, truncated, _ = env.step(action)
             cum_reward += reward
 
-        return next_state, cum_reward, terminated, truncated, _
+        return next_state, cum_reward, terminated, truncated, idle + 1
 
     
     def act(self, state:torch.Tensor, deterministic=False) -> torch.Tensor:
@@ -283,7 +286,7 @@ def train():
             while not done:
                 # Let the agent act and face the consequences
                 action = agent.act(state)
-                next_state, reward, terminated, truncated, _ = agent.step_idle(env, action) # Agent slacks off a bit ...
+                next_state, reward, terminated, truncated, n_idle = agent.step_idle(env, action) # Agent slacks off a bit ...
                 next_state = agent.observe(next_state) # Update the image stack
                 done = terminated or truncated
 
@@ -291,10 +294,10 @@ def train():
                 agent.memory.push(state, action, next_state, reward, terminated)
                 actions.append(action)
                 ep_loss += agent.update()
-                agent.global_steps += agent.n_idle
+                agent.global_steps += n_idle
                 cum_reward += reward
                 state = next_state
-                step += agent.n_idle
+                step += n_idle
         
             time_now = time.time() - time_start
             act_frac = [actions.count(val)/len(actions) 

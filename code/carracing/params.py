@@ -21,7 +21,7 @@ DQN_TAU = 0.01 # TAU is the update rate of the target network
 DQN_LR = 1e-3 # LR is the initial learning rate of the optimizer
 DQN_L2 = 0 # L2 regularization factor of the DQN Network
 DQN_SCHEDULER_FACTOR = 0.5 # The scheduler will reduce the learning rate when the model gets better
-DQN_SCHEDULER_PATIENCE = 150 # Number of steps (updates) before the scheduler acts
+DQN_SCHEDULER_PATIENCE = 100 # Number of steps (updates) before the scheduler acts
 DQN_SCHEDULER_MIN_LR = 1e-5 # The minimum learning rate that the scheduler can set
 
 

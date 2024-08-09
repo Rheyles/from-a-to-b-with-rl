@@ -2,6 +2,7 @@
 .envrc
 *.egg-info
 __pycache__
-models/
+models/*
 tests/
 results/
+archive/
