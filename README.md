@@ -4,6 +4,7 @@ This repository is the two-week project in Data Science of four people from `le 
 
 - [Environments](#environments)
   - [Frozen Lake](#frozen-lake)
+  - [Cart Pole](#cart-pole)
   - [Car Racing](#car-racing)
   - [Mountain car - only continuous](#mountain-car---only-continuous)
   - [Lunar Lander](#lunar-lander)
@@ -30,16 +31,22 @@ This repository is the two-week project in Data Science of four people from `le 
   - [Results on Frozen Lake](#results-on-frozen-lake)
     - [DQN, Vanilla case](#dqn-vanilla-case)
     - [DQN, Observing agent](#dqn-observing-agent)
-    - [DQN, Harder cases with custom reward](#dqn-harder-cases-with-custom-reward)
+    - [DQN, Harder cases](#dqn-harder-cases)
+  - [Results on Cartpole](#results-on-cartpole)
+    - [A2C](#a2c)
+      - [Actor](#actor)
+      - [Critic](#critic)
+    - [PPO](#ppo)
   - [Results on Car Racing](#results-on-car-racing)
     - [DQN, discrete case](#dqn-discrete-case)
     - [A2C, continuous case](#a2c-continuous-case)
-    - [PPO, continuous case](#ppo-continuous-case)
+    - [PPO, discrete case](#ppo-discrete-case)
   - [Results on MountainCar continuous](#results-on-mountaincar-continuous)
   - [LunarLander](#lunarlander)
     - [A2C, discrete case](#a2c-discrete-case)
+      - [Critic network](#critic-network)
+      - [Actor network](#actor-network)
     - [A2C, continuous case](#a2c-continuous-case-1)
-    - [PPO, continuous case](#ppo-continuous-case-1)
 
 
 
@@ -50,8 +57,12 @@ This repository is the two-week project in Data Science of four people from `le 
 <p align="center"> <img src="readme_assets/frozen_lake.gif" align="center" width=250 > </p>
 
 In this very simple environment, we have :
-- the agent state $s$, an integer from 0 to 24 representing its square nº.
-- the possible agent actions $a$, here discrete actions $\leftarrow (0), \downarrow (1), \rightarrow (2), \uparrow (3)$
+- the agent observation $s$ is **discrete** : it is the number of the tile, from 0 to 24.
+- the possible agent actions $a$, here **discrete too** :
+  - $\leftarrow (0)$
+  - $\downarrow (1)$
+  - $\rightarrow (2)$ 
+  - $\uparrow (3)$
 - a reward $r = +1$ on the square where the gift lies.
 
 Reaching the gift ends an 'episode'. **Falling into one of the frozen lakes triggers the end of an episode too with no reward**. In the original game, the agent state $s$ corresponds to their observation $o$, which means the agent does not know its surroundings.
@@ -61,15 +72,44 @@ Reaching the gift ends an 'episode'. **Falling into one of the frozen lakes trig
 - One setting a **negative reward $r = -1$ for falling into the lake**
 - One **allowing the agent to know the _type_ of the squares next to them**
 
+### Cart Pole
+
+<p align="center"> <img src="readme_assets/cart_pole.gif" align="center" width=250 > </p>
+
+In this simple environment, we need to keep the pole vertical by moving the cart. So : 
+
+- Observations are **continuous**
+  - The position of the cart, bound in $[-4.8,\,4.8]$
+  - The velocity of the cart, which is unbounded
+  - The angle of the pole, bound in $[-24^\circ,\,24^\circ]$
+  - The angular velocity of the pole, which is unbounded
+
+- Actions are **discrete**
+  - Go left (0)
+  - Go right (1)
+
+- Termination happens when the cart leaves the frame (position out of bounds) or when the pole angle is too large (angle out of bounds)
+
+- Rewards are simple : $+1$ per frame until termination. The goal is to reach 500.
+
 ### Car Racing
 
 <p align="center"> <img src="readme_assets/car_race.gif" align="center" width=400> </p>
 
 In this more complex environment :
 
-- the agent **state** is directly a gameplay image (by default).
-- the possible **actions** are discrete : `idle` (0), `left` (1), `right` (2), `gas` (3) and `brake` (4).
+- the agent **state** is directly a gameplay image (by default). The observation space will then be treated as **continuous**
+  
+- the possible **actions** are discrete : 
+  - `idle` (0)
+  - `left` (1)
+  - `right` (2)
+  - `gas` (3)
+  - `brake` (4).
+  
 - the car gets a **negative reward** $r=-0.1$ for each frame** and gets **a positive reward $r\simeq 20$ for each new track tile reached by the car**.
+
+- an episode ends when the car leaves the map (black zone), when 1000 steps are accomplished, or when the car has finished one entire lap on the track.
 
 **Variants : multiple frames** : We have always worked in a variant of the original environment, where we choose the observation to be a stack of several successive images (we have chosen 3 images). We did it by hand, before realizing there was a "VectorEnvironment" wrapper doing exactly that very easily 😅: reading the docs saves lives. The environment also works with **continuous actions** along three axes :
 
@@ -85,8 +125,10 @@ Which means you can both accelerate, brake and turn at the same time : a perfect
 
 In this environment :
 
-* The **state** $s$ (or observation $o$) is given by the _position_ of the car $x$ and its velocity $v$, both of which are unbounded.
-* The car **action** is actually a force $F \in [-1,1]$ that can be applied to the car at each time step
+* The **states** $s$ (or observation $o$) are **continuous** and given by the _position_ of the car $x$ and its velocity $v$, both of which are unbounded.
+
+* The car **action is also continuous** it is the force $F \in [-1,1]$ that is to be applied to the car at each time step
+
 * The **rewards** are a bit more subtle : a penalty of $-0.1 F^2$ is applied to prevent the car from applying large forces all the time. An additional reward of $+100$ is applied when the car moves past the flag. 
 * **Termination** occurs when the flag is reached, or when $1000$ steps are accomplished.
 
@@ -96,14 +138,18 @@ In this environment :
 
 In this environment :
 
-* The **observation** $o$ (equal to the state) contains 8 variables : 
+* The **observation** $o$ (equal to the state) contains 6 **continuous** variables and 2 **discrete** variables: 
   * the $x,y$ positions [continuous]
   * the $v_x, v_y$ linear velocities [continuous] 
   * the angle $\theta$ and angular velocity $\dot{\theta}$ of the lander [continuous]
   * two variables signalling contact between the _legs_ of the lander and the ground [boolean].
+ 
 * The **actions are discrete** : do nothing [0], fire left orientation engine [1], fire main engine (upwards thrust) [2], fire right orientation engine [3]
+
 * **Rewards** [are a bit elaborate](https://gymnasium.farama.org/environments/box2d/lunar_lander/), but they encourage the agent to get closer to the ground, to not go too fast and land safely -- and smoothly -- on the surface.
+
 * The lander starts at the centre of the "viewport", but a random initial force it applied onto it. 
+
 * **Termination** occurs when the lander crashes, gets outside of the field of view, or reaches "not awake" states. 
 
 **Continuous variant**: It is possible, as in [Car Racing](#car-racing-️), to make a _continuous_ variant of this environment, in which case we get two actions, one for the main engine (from -1 to 1) and one for the side engines (again from -1 to 1). [As mentioned in the official docs](https://gymnasium.farama.org/environments/box2d/lunar_lander/#arguments), the sign of the side engine action will determine _which_ lateral booster is used. 
@@ -468,28 +514,122 @@ If you want to monitor the GPU in the terminal, you can type
 
 #### DQN, Vanilla case
 
-Our agent easily solved the damn thang.
+Our agent solved the environment within 750 episodes. The training curves are shown below.
+
+
+<p align="center"><img src="readme_assets/frozenlake_4x4_training.png", width=530></p>
 
 #### DQN, Observing agent
 
-#### DQN, Harder cases with custom reward 
+The observing agent was usually much faster when learning from the environment, and for a 4x4 case it takes around 400 episodes to solve. The agent also generalises _much better_ than the standard agent, which is normal since the agent can now correlate the type of square with an associated reward. 
+
+#### DQN, Harder cases 
+
+In the end, using the custom reward did not work so well, as the agent typically stayed away from the lakes but eventually stopped exploring and remained stuck in a square. The agent was able to solve a 5x5 environment with more lakes within 2000 episodes. The hardest part is, as usual, to reach the reward the first time. 
+
+
+<p align="center"><img src="readme_assets/frozenlake_5x5_hard_training.png", width=530></p>
+
+
+### Results on Cartpole
+
+CartPole is fairly fast to run, so it constitutes an excellent benchmark to see if the algorithms we write are sound. 
+
+#### A2C
+
+The best results we obtained with CartPole were obtained with an extremely simple network architecture : 
+
+##### Actor
+
+1. Linear : (`n_observations`, 4)
+2. ReLU()
+3. Linear : (4, `n_actions`)
+4. SoftMax()
+
+
+##### Critic
+
+1. Linear : (`n_observations`, 4)
+2. ReLU()
+3. Linear : (4, 1)
+     
+After 850 episodes (a bit long, I concede), the agent manages to find a strategy to consistently reach a score of 500.     
+
+<p align="center"><img src="readme_assets/cartpole_a2c_training.png", width=530></p>
+
+#### PPO
+
+Once again, the environment was mostly used to debug the PPO algorithm. We used : 
+* a Monte-Carlo sampling for the state values (this is equivalent to set $\lambda = 1$ for the generalised advantage estimate)
+* no mini-batching during optimization
+
+The network was essentially chosen to be the same as in the A2C case, and the results are in the end quite similar to what we get from A2C 
+
+<p align="center"><img src="readme_assets/cartpole_ppo_training.png", width=530></p>
+
 
 ### Results on Car Racing
 
 #### DQN, discrete case
 
+Car Racing works well with DQN and a relatively simple CNN. We skip two environment frames out of three (acting every three frames) and our observation contains three "active" frames (so spanning over 7 environment frames). From that, we apply a relatively simple network: 
+
+1. Conv2D : 16 filters, kernel 4x4, stride 4 
+2. MaxPool : 2x2
+3. Conv2D : 32 filters, kernel 2x2, stride 2
+4. MaxPool : 2x2
+5. Flatten : N inputs
+6. Linear : N -> N / 4
+7. ReLU
+8. Linear : N / 4 -> N actions
+  
+Reaching around 700 on average took 200 episodes, after which progression was somewhat slower, but eventually an agent reached an average score over 800 after 800 episodes
+
+<p align="center"><img src="readme_assets/carracing_dqn_training.png", width=530></p>
+
 #### A2C, continuous case
 
-#### PPO, continuous case
+Interestingly, the A2C algorithm developed for Car Racing never worked, with our agent happily doing donuts most of the time. It is possible that the architecture of the network at the time was a bit too large, but we did not want to spend too much time on it, especially since we could not find anyone else making it work on the internet.
+
+#### PPO, discrete case
+
+The proximal policy agent was coded to learn relatievly slowly and to achieve maximum performance. No wonder, then, that it took around 2000 episodes to attain 800. Interestingly, the average reward kept increasing to reach almost 900 later on, and the corresponding agents were becoming extremely good at the game. 
+
+
+<p align="center"><img src="readme_assets/carracing_ppo_training.png", width=530></p>
 
 ### Results on MountainCar continuous
 
-Here we only tried A2C.
+We only tried A2C algorithms on MountainCar continuous. Due to the sparsity of the reward, we never managed to consistently reach the goal and our agent usually ended up doing nothing to aim for a zero reward. This is very similar to what most people are getting online. 
 
 ### LunarLander
 
 #### A2C, discrete case
 
+A2C algorithms are notoriously tricky in terms of learning, and they sometimes seem to "forget" their training after getting a good score (which is a bit infuriating). 
+
+##### Critic network
+
+1. Linear : (`n_observations`, 128)
+2. ReLU()
+3. Linear : (128,128)
+4. ReLU()
+5. Linear : (128,1)
+
+##### Actor network
+
+1. Linear : (`n_observations`, 128)
+2. ReLU()
+3. Linear : (128,128)
+4. ReLU()
+5. Linear : (128,`n_actions`)
+6. SoftMax()
+
+Limiting the size of the network helps limit "unlearning",but surprisingly enough results got a bit worse for networks of size 64 and 32. It is possible that we did not fully optimize the other hyperparameters for smaller networks. For the 128x128 network, we stopped the training once the agent reached 20 episodes with an average score over 200. This was achieved after around 1200 episodes.
+
+<p align="center"><img src="readme_assets/lunarlander_a2c_training.png", width=530></p>
+
 #### A2C, continuous case
 
-#### PPO, continuous case
+The continuous case proved particularly challenging, and we never really managed to exceed ~0 in terms of cumulative rewards for a single episode. It seems that `stable-baselines3` with the `RL-zoo3` fine-tuned hyperparameters manages to get around 100-150 on average. Hence, it seems that A2C cannot really solve LunarLander in the continuous case. 
+

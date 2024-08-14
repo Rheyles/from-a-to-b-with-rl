@@ -10,27 +10,32 @@ import torch.nn as nn
 from collections import deque
 from datetime import datetime
 from colorama import Fore, Style
-from torch.distributions import Categorical
+from torch.distributions import Normal
 
 
-from params_PPO import *
+from params_PPO_continuous import *
 
 
 ### CLASSES
 
 class ConvNet(nn.Module):
 
-    def __init__(self, obs:tuple, n_filters=16, num_actions=1, type='actor', dropout_rate=DROPOUT_RATE):
+    def __init__(self, obs:tuple, action_space:gym.spaces.Box , n_filters=16, net_type='actor', dropout_rate=DROPOUT_RATE):
 
         super(ConvNet, self).__init__()
         img_shape = obs.shape[-2:] # Dim 0 will be reserved for the batch
         n_imgs = obs.shape[-3]
 
-        k1, k2, k3 = 4,2,1
-        s1, s2, s3 = 4,2,1
-        img_shape1 = [np.ceil((elem - (k1 - 1)) / (s1 * 2)).astype(int) for elem in img_shape]
-        img_shape2 = [np.ceil((elem - (k2 - 1)) / (s2 * 2)).astype(int) for elem in img_shape1]
+        k1, k2 = 4,2
+        s1, s2 = 4,2
+        img_shape1 = [(1 + (elem - k1) // (s1)) // 2 for elem in img_shape]
+        img_shape2 = [(1 + (elem - k2) // (s2)) // 2 for elem in img_shape1]
         n_linear = n_filters * 2 * np.prod(img_shape2) # Number of linear neurons when we flatten
+
+        self.net_type = net_type
+        self.num_actions, = action_space.shape
+        self.act_hi = action_space.high
+        self.act_lo = action_space.low
         
         self.conv1 = nn.Sequential(
             nn.Conv2d(n_imgs, n_filters, kernel_size=k1, stride=s1),
@@ -44,14 +49,22 @@ class ConvNet(nn.Module):
             nn.MaxPool2d(kernel_size=2),
             nn.Dropout(p=dropout_rate))
         
-        if type == 'actor': 
+        if self.net_type == 'actor': 
             # We get the probabilities for each action
-            self.dense = nn.Sequential(
+            self.mu = nn.Sequential(
                     nn.Flatten(),
                     nn.Linear(n_linear, n_linear // 4),
                     nn.ReLU(),
-                    nn.Linear(n_linear // 4, num_actions),
-                    nn.Softmax(dim=1)
+                    nn.Linear(n_linear // 4, self.num_actions),
+                    nn.Tanh()
+                )
+            
+            self.sigma = nn.Sequential(
+                    nn.Flatten(),
+                    nn.Linear(n_linear, n_linear // 4),
+                    nn.ReLU(),
+                    nn.Linear(n_linear // 4, self.num_actions),
+                    nn.Sigmoid()
                 )
             
         else:
@@ -66,7 +79,15 @@ class ConvNet(nn.Module):
     def forward(self, x) -> torch.Tensor:
         x = self.conv1(x)
         x = self.conv2(x)
-        return self.dense(x)    
+
+        if self.net_type == 'actor':
+            mus = self.mu(x)
+            sigmas = self.sigma(x)
+            return mus, sigmas
+
+        else: 
+            x = self.dense(x)
+            return x
 
 class PPOAgent():
     def __init__(self, 
@@ -90,8 +111,6 @@ class PPOAgent():
         self.n_imgs = n_imgs 
         self.n_idle = n_idle
         self.entropy_beta = entropy_beta
-        self.action_space = env.action_space
-        self.num_actions = env.action_space.n
         self.gamma = gamma
         self.buffer_size = buffer_size
         self.minibatch_size = minibatch_size
@@ -102,8 +121,8 @@ class PPOAgent():
             self.current_obs.append(state[:,:,1]/255)
         torch_obs = torch.tensor(np.array(self.current_obs), dtype=torch.float32).unsqueeze(0)
 
-        self.critic_net = ConvNet(torch_obs, n_filters=n_filters, type='critic')
-        self.actor_net = ConvNet(torch_obs, n_filters=n_filters, type='actor', num_actions=self.num_actions)
+        self.critic_net = ConvNet(torch_obs, env.action_space, n_filters=n_filters, net_type='critic')
+        self.actor_net = ConvNet(torch_obs, env.action_space, n_filters=n_filters, net_type='actor')
 
         self.actor_optimizer = torch.optim.AdamW(params=self.actor_net.parameters(), lr=actor_lr, weight_decay=L2_alpha)
         self.critic_optimizer = torch.optim.AdamW(params=self.critic_net.parameters(), lr=critic_lr, weight_decay=L2_alpha)
@@ -131,7 +150,7 @@ class PPOAgent():
              min_lr=SCHEDULER_MIN_LR, 
              patience=SCHEDULER_PATIENCE)
 
-    def step_idle(self, env:gym.Env, action:int | np.ndarray):
+    def step_idle(self, env:gym.Env, action: np.ndarray):
         """ A routine that plays n_idle steps from an environment with the same action. 
         The routine : 
         - discards the intermediate states (not put anywhere)
@@ -158,7 +177,9 @@ class PPOAgent():
         return torch.tensor(np.array(self.current_obs), dtype=torch.float32).unsqueeze(0)
     
     
-    def apply_policy(self, obs:torch.Tensor | np.ndarray, action=None, deterministic=False) -> torch.Tensor:
+    def apply_policy(self, obs:torch.Tensor | np.ndarray, 
+                     action=None, 
+                     deterministic=False) -> torch.Tensor:
         """ 
         Applies the current network policy and 
         * selects an action at random if `action=None` and `deterministic=False`
@@ -172,12 +193,13 @@ class PPOAgent():
         else:
             torch_obs = obs
 
-        probs = self.actor_net.forward(torch_obs)
-        distrib = Categorical(probs)
+        mu, sigma = self.actor_net.forward(torch_obs)
+        distrib = Normal(mu, sigma)
+        
         if action is None: 
-            action = distrib.sample() if not deterministic else distrib.mode.unsqueeze(0)
+            action = distrib.sample() if not deterministic else distrib.mean
 
-        log_probs = distrib.log_prob(action.squeeze()).unsqueeze(-1)
+        log_probs = torch.sum(distrib.log_prob(action), dim=1, keepdim=True)
         entropy = distrib.entropy()
 
         return action, log_probs, entropy
@@ -217,7 +239,7 @@ class PPOAgent():
         # These things should not change throughout the epochs 
         true_state_vals = self.true_state_values() 
         torch_obs = torch.cat(tuple(self.obs))
-        actions = torch.cat(tuple(self.actions)).unsqueeze(-1)
+        actions = torch.cat(tuple(self.actions))
         log_probs = torch.cat(tuple(self.log_probs)).detach()
         advantage = true_state_vals - self.est_state_values(torch_obs)  # Used for actor only
         adv_normed = (advantage - advantage.mean()) \
@@ -290,17 +312,17 @@ def minibatch(*args,
 
 def train():
     
-    file_prefix = 'PPO_Carracing_mb_' + datetime.now().strftime('%y-%m-%d_%H-%M')
+    file_prefix = 'PPO_Carracing_continuous_' + datetime.now().strftime('%y-%m-%d_%H-%M')
 
     # Initialize Environment and agent
-    env = gym.make("CarRacing-v2", continuous=False, render_mode='rgb_array')
+    env = gym.make("CarRacing-v2", continuous=True, render_mode='rgb_array')
     env.metadata['render_fps'] = 300
     state, _ = env.reset()    
         
     # Introducing the agent in the field. We need the state (for its shape) to initialise the network
     agent = PPOAgent(env, state)
     for _ in range(N_START_SKIP): 
-        action = 3
+        action = np.array([0,1,0])
         state, _, _, _, _ = env.step(action)    
         obs = agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
     
@@ -316,12 +338,12 @@ def train():
     try:
         # Init log file
         with open('./models/' + file_prefix + '_log.csv', 'w') as myfile:
-            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,e_loss,action_0,action_1,action_2,action_3,action_4,a_lr,c_lr\n')
+            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,e_loss,action_0,action_1,action_2,a_lr,c_lr\n')
 
         # Save hyperparameters now
         print('./models/' + file_prefix + '_prms.json')
         with open('models/' + file_prefix + '_prms.json', 'w') as myfile:
-            import params_PPO as pm
+            import params_PPO_continuous as pm
             prm_dict = {key : val for key, val in pm.__dict__.items() if '__' not in key}
             json.dump(prm_dict, myfile)
 
@@ -330,8 +352,9 @@ def train():
             # Let the agent act and face the consequences
             obs = agent.observe(state)
             action, probs, entropy = agent.apply_policy(obs)
+            np_action = action.squeeze().detach().numpy()
             next_state, reward, terminated, truncated, n_idle \
-                = agent.step_idle(env, action.item()) # Agent slacks off a bit ...
+                = agent.step_idle(env, np_action) # Agent slacks off a bit ...
             done = terminated or truncated
 
             # Update thingies
@@ -342,7 +365,7 @@ def train():
             agent.log_probs.append(probs)
             agent.entropy.append(entropy)
 
-            actions.append(action.item())
+            actions.append(np_action)
             iters_since_last_update += 1
             steps += n_idle
             global_steps += n_idle
@@ -364,14 +387,13 @@ def train():
             if done: 
  
                 time_now = time.time() - time_start
-                act_frac = [actions.count(val)/len(actions) 
-                                for val in range(env.action_space.n)]
+                act_avg = np.mean(np.array(actions), axis=0)
                 cum_rewards.append(cum_reward)
                 
                # Write some stuff in da file
                 with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
                     myfile.write(f'{episode},{steps},{time_now},{cum_reward},{actor_loss},{critic_loss},{entropy_loss},' \
-                                +f'{act_frac[0]},{act_frac[1]},{act_frac[2]},{act_frac[3]},{act_frac[4]},{a_lr},{c_lr}\n')
+                                +f'{act_avg[0]},{act_avg[1]},{act_avg[2]},{a_lr},{c_lr}\n')
                             
                 # Fancier colors for standard output
                 bg, colr = Style.RESET_ALL, Fore.RED
@@ -389,11 +411,9 @@ def train():
                     + f' | A_LOSS {actor_loss:+5.2e}' \
                     + f' | C_LOSS {critic_loss:6.2f}' \
                     + f' | E_LOSS {entropy_loss:5.2f}' \
-                    + f' | A0 {act_frac[0]:.2f}' \
-                    + f' | A1 {act_frac[1]:.2f}' \
-                    + f' | A2 {act_frac[2]:.2f}' \
-                    + f' | A3 {act_frac[3]:.2f}' \
-                    + f' | A4 {act_frac[4]:.2f}' \
+                    + f' | A0 {act_avg[0]:+.2f}' \
+                    + f' | A1 {act_avg[1]:+.2f}' \
+                    + f' | A2 {act_avg[2]:+.2f}' \
                     + f' | A_LR {a_lr:5.2e}')
                 
                 # Reset variables for next episode 
@@ -401,8 +421,8 @@ def train():
                 cum_reward, steps, done, actions = 0, N_START_SKIP, False, []
                 global_steps += N_START_SKIP
                 episode += 1
-                for _ in range(N_START_SKIP): 
-                    action = 3
+                for _ in range(N_START_SKIP):
+                    action = np.array([0,1,0])
                     agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
                     state, _, _, _, _ = env.step(action)    
                 
@@ -433,7 +453,7 @@ def evaluate(file, index=-1, mode='human'):
     with open(json_file) as myfile:
         prms = json.load(myfile)
     
-    env = gym.make('CarRacing-v2', continuous=False, render_mode=mode)
+    env = gym.make('CarRacing-v2', continuous=True, render_mode=mode)
     env.metadata['render_fps'] = 30
     state, _ = env.reset()
 
@@ -465,14 +485,15 @@ def evaluate(file, index=-1, mode='human'):
         cum_reward, step, done = 0, 0, False
         state, _ = env.reset()
         for _ in range(N_START_SKIP): 
-            action = 3
+            action = np.array([0,1,0])
             state, _, _, _, _ = env.step(action)    
             obs = agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
         
         while not done:
 
-            action, _, _ = agent.apply_policy(obs, deterministic=False) # Deterministic or not here, not sure ...
-            next_state, reward, terminated, truncated, jump_steps = agent.step_idle(env, action.item())
+            action, _, _ = agent.apply_policy(obs, deterministic=False) # Deterministic or not here, not sure ...           
+            np_action = action.squeeze().detach().numpy()
+            next_state, reward, terminated, truncated, jump_steps = agent.step_idle(env, np_action)
             next_obs = agent.observe(next_state)
             done = terminated or truncated
 
@@ -493,7 +514,7 @@ def evaluate(file, index=-1, mode='human'):
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and ('--eval' in sys.argv[1] or '-e' in sys.argv[1]):
-        file = 'PPO_CarRacing' 
+        file = 'PPO_CarRacing_continuous' 
         print(file)
         if len(sys.argv) > 2:
             file += sys.argv[2]

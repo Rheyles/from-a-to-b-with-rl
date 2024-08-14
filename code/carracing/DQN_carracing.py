@@ -13,7 +13,7 @@ from collections import namedtuple, deque
 from datetime import datetime
 from colorama import Fore, Style
 
-from params import *
+from params_DQN import *
 
 
 ### CLASSES
@@ -45,11 +45,10 @@ class ConvDQN(nn.Module):
         img_shape = obs.shape[-2:] # Dim 0 will be reserved for the batch
         n_imgs = obs.shape[-3]
 
-        k1, k2, k3 = 4,2,1
-        s1, s2, s3 = 4,2,1
-        img_shape1 = [np.ceil((elem - (k1 - 1)) / (s1 * 2)).astype(int) for elem in img_shape]
-        img_shape2 = [np.ceil((elem - (k2 - 1)) / (s2 * 2)).astype(int)   for elem in img_shape1]
-        # img_shape3 = [(elem - (k3 - 1)) // (s3 * 2) for elem in img_shape2]
+        k1, k2 = 4,2
+        s1, s2 = 4,2
+        img_shape1 = [(1 + (elem - k1) // (s1)) // 2 for elem in img_shape]
+        img_shape2 = [(1 + (elem - k2) // (s2)) // 2 for elem in img_shape1]
 
         n_linear = n_filters * 2 * np.prod(img_shape2) # Number of linear neurons when we flatten
         
@@ -269,7 +268,7 @@ def train():
         # Save hyperparameters now
         print('./models/' + file_prefix + '_prms.json')
         with open('models/' + file_prefix + '_prms.json', 'w') as myfile:
-            import params as pm
+            import params_DQN as pm
             prm_dict = {key : val for key, val in pm.__dict__.items() if '__' not in key}
             json.dump(prm_dict, myfile)
 

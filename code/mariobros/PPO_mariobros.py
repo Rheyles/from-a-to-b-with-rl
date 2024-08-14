@@ -3,15 +3,18 @@ import glob
 import sys
 import time
 import numpy as np
-import gymnasium as gym
+import  gym
 import gym_super_mario_bros
 import torch
 import torch.nn as nn
 
+from nes_py.wrappers import JoypadSpace
+from gym_super_mario_bros.actions import COMPLEX_MOVEMENT
 from collections import deque
 from datetime import datetime
 from colorama import Fore, Style
 from torch.distributions import Categorical
+from gymnasium.wrappers import StepAPICompatibility, TimeLimit
 
 from params import *
 
@@ -26,11 +29,13 @@ class ConvNet(nn.Module):
         img_shape = obs.shape[-2:] # Dim 0 will be reserved for the batch
         n_imgs = obs.shape[-3]
 
-        k1, k2, k3 = 4,2,1
+        k1, k2, k3 = 4,2,2
         s1, s2, s3 = 4,2,1
-        img_shape1 = [np.ceil((elem - (k1 - 1)) / (s1 * 2)).astype(int) for elem in img_shape]
-        img_shape2 = [np.ceil((elem - (k2 - 1)) / (s2 * 2)).astype(int) for elem in img_shape1]
-        n_linear = n_filters * 2 * np.prod(img_shape2) # Number of linear neurons when we flatten
+        img_shape1 = [(1 + (elem - k1) // (s1)) // 2 for elem in img_shape]
+        img_shape2 = [(1 + (elem - k2) // (s2)) // 2 for elem in img_shape1]
+        img_shape3 = [(1 + (elem - k3) // (s3)) // 2 for elem in img_shape2]
+
+        n_linear = n_filters * 4 * np.prod(img_shape3) # Number of linear neurons when we flatten
         
         self.conv1 = nn.Sequential(
             nn.Conv2d(n_imgs, n_filters, kernel_size=k1, stride=s1),
@@ -44,25 +49,33 @@ class ConvNet(nn.Module):
             nn.MaxPool2d(kernel_size=2),
             nn.Dropout(p=dropout_rate))
         
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(n_filters * 2, n_filters * 4, kernel_size=k3, stride=s3),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Dropout(p=dropout_rate))
+        
         if type == 'actor': 
             self.dense = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(n_linear, n_linear // 4),
+                nn.Linear(n_linear, n_linear // 2),
                 nn.ReLU(),
-                nn.Linear(n_linear // 4, num_actions),
+                nn.Linear(n_linear // 2, num_actions),
                 nn.Softmax(dim=1)
             )
+
         else:
             self.dense = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(n_linear, n_linear // 4),
+                nn.Linear(n_linear, n_linear // 2),
                 nn.ReLU(),
-                nn.Linear(n_linear // 4, 1)
+                nn.Linear(n_linear // 2, 1)
             )        
 
     def forward(self, x) -> torch.Tensor:
         x = self.conv1(x)
         x = self.conv2(x)
+        x = self.conv3(x)
         return self.dense(x)    
 
 class PPOAgent():
@@ -77,7 +90,8 @@ class PPOAgent():
                  critic_lr=CRITIC_LR,
                  L2_alpha=L2_ALPHA,
                  entropy_beta=ENTROPY_BETA,
-                 buffer_size=STEPS_TO_UPDATE
+                 buffer_size=STEPS_TO_UPDATE,
+                 minibatch_size=MINIBATCH_SIZE,
                  ):
         
         # Save some parameters of the model for later 
@@ -86,6 +100,7 @@ class PPOAgent():
         self.entropy_beta = entropy_beta
         self.action_space = env.action_space
         self.num_actions = env.action_space.n
+        self.minibatch_size = minibatch_size
         self.gamma = gamma
 
         # Preparing the agent observation and network
@@ -158,34 +173,35 @@ class PPOAgent():
         * does not select the action, just computes the probability associated to it if `action` is not None
         (action must have at least the first dimension equal to that of obs, by the way)
         """
-
+ 
         if isinstance(obs, np.ndarray):
-            obs = torch.Tensor(obs).unsqueeze(0)
+            torch_obs = torch.Tensor(obs).unsqueeze(0)
+        else:
+            torch_obs = obs
 
-        probs = self.actor_net.forward(obs)
+        probs = self.actor_net.forward(torch_obs)
         distrib = Categorical(probs)
         if action is None: 
             action = distrib.sample() if not deterministic else distrib.mode.unsqueeze(0)
+
         log_probs = distrib.log_prob(action.squeeze()).unsqueeze(-1)
         entropy = distrib.entropy()
 
         return action, log_probs, entropy
 
    
-    def compute_est_state_values(self) -> torch.Tensor:
+    def est_state_values(self, torch_obs:torch.Tensor) -> torch.Tensor:
         """ Ask the critic to judge a state (estimates the V(s)) and the
-        next state (estimates the V(s')). You can specify if the episode
-        is terminated, in which case the value will automatically be
-        set to 0 """
+        next state (estimates the V(s'))."""
         
-        torch_obs = torch.cat(tuple(self.obs))
-        x = self.critic_net.forward(torch_obs)
-        return x
+        return self.critic_net(torch_obs)
+    
 
-    def compute_true_state_values(self):
+    def true_state_values(self) -> torch.Tensor:
         """ Computes the true state value 
          that will be compared to what is estimated from 
-         the NN model to compute the critic loss"""
+         the NN model to compute the critic loss. 
+         So the way I code things means I am doing Monte Carlo sampling"""
         
         state_values = deque(maxlen=len(self.rewards)) # I use it because of precious .appendleft method
         state_values.append(0)
@@ -197,54 +213,83 @@ class PPOAgent():
 
         return torch.Tensor(np.array(state_values)).unsqueeze(-1)
     
-    def compute_advantage(self, detach=False, normalize=False):
-        """ Computes the critic advantage for PPO. 
-        Provides an option to detach the result and to normalise it (useful to give to the actor !)"""
-    
-        est_state_vals = self.compute_est_state_values()
-        true_state_vals = self.compute_true_state_values()
-        advantage = (true_state_vals - est_state_vals)
 
-        if normalize:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-9)
-
-        if detach: return advantage.detach()
-        return advantage
-    
-
-    def update(self, n_epochs=5, clip_val=0.2):
+    def update(self, n_epochs=UPDATE_EPOCHS, clip_val=PPO_CLIP_VAL):
         '''
-        Here I update both the critic net and the policy (actor) net at the same time
+        Here I update both the critic net and the policy (actor) net at the same time.
+        NOTE 1 : the mini_batching is a bit ugly
+        NOTE 2 : Somehow the advantage should _not_ be updated for the actor during update ? 
         '''
         
-        # These things remain constant for all epochs
+        # These things should not change throughout the epochs 
+        true_state_vals = self.true_state_values() 
+        torch_obs = torch.cat(tuple(self.obs))
         actions = torch.cat(tuple(self.actions)).unsqueeze(-1)
         log_probs = torch.cat(tuple(self.log_probs)).detach()
-        torch_obs = torch.cat(tuple(self.obs))
+        advantage = true_state_vals - self.est_state_values(torch_obs)  # Used for actor only
+        adv_normed = (advantage - advantage.mean()) \
+            / (1e-5 + advantage.std())  # Used for actor only
+        
+        critic_loss_record, actor_loss_record, entropy_loss_record = [],[],[]
 
         for _ in range(n_epochs):
-            advantage = self.compute_advantage()
-            normed_advantage = self.compute_advantage(detach=True, normalize=True)
-            _, new_log_probs, entropy = self.apply_policy(obs=torch_obs, action=actions)
-            raw_prob_ratio = torch.exp(new_log_probs - log_probs)
-            clipped_prob_ratio = torch.clip(raw_prob_ratio, 1 - clip_val, 1 + clip_val)
 
-            actor_loss = torch.maximum(-normed_advantage * raw_prob_ratio, \
-                                       -normed_advantage * clipped_prob_ratio).mean()
-            entropy_loss = torch.mean(entropy)
-            actor_loss = actor_loss + self.entropy_beta * entropy_loss
+            [obs_batches, actions_batches, log_probs_batches, adv_batches, tsv_batches] \
+                = minibatch(torch_obs, actions, log_probs, adv_normed, true_state_vals, split_length=self.minibatch_size)
 
-            critic_loss = (advantage ** 2).mean()
+            for obs_batch, actions_batch, log_probs_batch, adv_batch, tsv_batch in \
+                zip(obs_batches, actions_batches, log_probs_batches, adv_batches, tsv_batches):
+
+                # Actor part
+                _, new_log_probs_batch, entropy_batch = self.apply_policy\
+                    (obs=obs_batch, action=actions_batch)
+                
+                raw_prob_ratio = torch.exp(new_log_probs_batch - log_probs_batch)
+                clipped_prob_ratio = torch.clip(raw_prob_ratio, 1 - clip_val, 1 + clip_val)
+                actor_loss = torch.maximum \
+                    (-adv_batch.detach() * raw_prob_ratio, \
+                     -adv_batch.detach() * clipped_prob_ratio).mean()
+                entropy_loss = self.entropy_beta * entropy_batch.mean()
+                actor_loss += entropy_loss
+
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor_optimizer.step()
+
+                # # Critic part
+                esv_batch = self.est_state_values(obs_batch)
+                critic_loss = ((tsv_batch - esv_batch) ** 2).mean()
+
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic_optimizer.step()
+
+                actor_loss_record.append(actor_loss.item())
+                entropy_loss_record.append(entropy_loss.item())
+                critic_loss_record.append(critic_loss.item())
             
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            self.actor_optimizer.step()
-            
-            self.critic_optimizer.zero_grad()
-            critic_loss.backward()
-            self.critic_optimizer.step()
-            
-        return actor_loss, critic_loss, entropy_loss
+        return sum(actor_loss_record)/len(actor_loss_record), \
+            sum(critic_loss_record)/len(critic_loss_record), \
+            sum(entropy_loss_record)/len(entropy_loss_record)
+
+
+########################################
+# HELPER FUNCTIONS
+#########################################
+
+def minibatch(*args, 
+              split_length:int) -> list[torch.Tensor]:
+    """Shuffles the data buffer and splits it into mini-batches of size
+    `split_length`."""
+
+    out_vars = []
+    shuffled = torch.randperm(len(args[0]))
+    for arg in args:
+        if not isinstance(arg, torch.Tensor):
+            arg = torch.tensor(arg)
+        out_vars.append(torch.split(arg[shuffled],split_length))
+
+    return out_vars
 
 
 #########################################
@@ -256,9 +301,20 @@ def train():
     file_prefix = 'PPO_MarioBros_' + datetime.now().strftime('%y-%m-%d_%H-%M')
 
     # Initialize Environment and agent
-    env = gym_super_mario_bros.make("SuperMarioBros-v0")
+    # Here we have to adapt our code a bit since Super Mario works with an 
+    # old Gym environment while our version of Gym is recent
+    env = gym.make("SuperMarioBrosRandomStages-v0", 
+                   stages=['1-1','2-1','4-1','5-1', '2-3', '1-3'])
+    steps = env._max_episode_steps  # get the original max_episode_steps count
+    env = JoypadSpace(env.env, COMPLEX_MOVEMENT)  # set the joypad wrapper
+    def gymnasium_reset(self, **kwargs):
+        return self.env.reset()
+        
+    # overwrite the old reset to accept `seeds` and `options` args
+    env.reset = gymnasium_reset.__get__(env, JoypadSpace)  
+    env = TimeLimit(StepAPICompatibility(env, output_truncation_bool=True), max_episode_steps=steps) 
     env.metadata['render_fps'] = 150
-    state, _ = env.reset()    
+    state = env.reset()    
         
     # Introducing the agent in the field. We need the state (for its shape) to initialise the network
     agent = PPOAgent(env, state)
@@ -296,6 +352,7 @@ def train():
             next_state, reward, terminated, truncated, n_idle \
                 = agent.step_idle(env, action.item()) # Agent slacks off a bit ...
             done = terminated or truncated
+            env.render()
 
             # Update thingies
             agent.actions.append(action)
@@ -337,12 +394,10 @@ def train():
                             
                 # Fancier colors for standard output
                 bg, colr = Style.RESET_ALL, Fore.RED
-                if cum_reward > 200:
-                    colr = Fore.YELLOW
-                if cum_reward > 400:
-                    colr = Fore.BLUE
-                if cum_reward > 600:
-                    colr = Fore.GREEN
+                if cum_reward > 2000: colr = Fore.MAGENTA
+                if cum_reward > 3500: colr = Fore.BLUE
+                if cum_reward > 5000: colr = Fore.CYAN
+                if cum_reward > 7000: colr = Fore.GREEN
                     
                 print(f'Ep. {episode:4d} | T {time_now:7.1f} | ' \
                     + colr + f'Rw {cum_reward:+7.2f} | EpLen {steps:4d}' + bg \
@@ -387,24 +442,36 @@ def train():
 def evaluate(file, index=-1, mode='human'):
     """ Evaluates a trained model (default : the best version of the last trained model)"""
 
-    model_file = glob.glob('./models/' + file + '*latest*')[index]
+    model_file = glob.glob('./models/' + file + '*best_actor*')[index]
     json_file = glob.glob('./models/' + file + '*prms*')[index]
     base_name = '_'.join(json_file.split('_')[:-1])
+    print(json_file)
+    print(model_file)
 
     with open(json_file) as myfile:
         prms = json.load(myfile)
     
-    env = gym.make('CarRacing-v2', continuous=False, render_mode=mode)
-    env.metadata['render_fps'] = 10
+    env = gym.make("SuperMarioBrosRandomStages-v0", 
+                   stages=['1-1','2-1','4-1','5-1', '2-3', '1-3'])
+    steps = env._max_episode_steps  # get the original max_episode_steps count
+    env = JoypadSpace(env.env, COMPLEX_MOVEMENT)  # set the joypad wrapper
+    def gymnasium_reset(self, **kwargs):
+        return self.env.reset()
+        
+    # overwrite the old reset to accept `seeds` and `options` args
+    env.reset = gymnasium_reset.__get__(env, JoypadSpace)  
+    env = TimeLimit(StepAPICompatibility(env, output_truncation_bool=True), max_episode_steps=steps) 
+    env.metadata['render_fps'] = 30
+    state = env.reset()    
+
     if mode != 'human': 
         env = gym.wrappers.RecordVideo(env=env, 
                                     video_folder='',
                                     name_prefix=base_name,
                                     episode_trigger=lambda x: True)
 
-    agent = DQNAgent(env, n_filters=prms['N_FILTERS'], n_idle=prms['N_IDLE'], n_imgs=prms['N_IMGS'])
-    agent.policy_net.load_state_dict(torch.load(model_file))
-    agent.target_net.load_state_dict(torch.load(model_file))  
+    agent = PPOAgent(env, state=state, n_filters=prms['N_FILTERS'], n_idle=prms['N_IDLE'], n_imgs=prms['N_IMGS'])
+    agent.actor_net.load_state_dict(torch.load(model_file))  
         
     # A bit of display
     print('\n\nOpening : ' + model_file)
@@ -421,21 +488,24 @@ def evaluate(file, index=-1, mode='human'):
         env.start_video_recorder()
     
     for episode in range(5):
+
         cum_reward, step, done = 0, 0, False
         state, _ = env.reset()
-        state = agent.observe(state)
+        for _ in range(N_START_SKIP): 
+            action = 3
+            state, _, _, _, _ = env.step(action)    
+            obs = agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
         
         while not done:
-            # env.render()
-            action = agent.act(state, deterministic=True)
-            next_state, reward, terminated, truncated, _ = env.step(action)
-            next_state = agent.observe(next_state)
+
+            action, _, _ = agent.apply_policy(obs, deterministic=False) # Deterministic or not here, not sure ...
+            next_state, reward, terminated, truncated, jump_steps = agent.step_idle(env, action.item())
+            next_obs = agent.observe(next_state)
             done = terminated or truncated
 
-            state = next_state
+            obs = next_obs
             cum_reward += reward
-            step += 1
-            agent.global_steps += 1
+            step += jump_steps
 
         cum_rewards.append(cum_reward)
         steps.append(step)

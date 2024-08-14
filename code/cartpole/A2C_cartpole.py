@@ -247,7 +247,7 @@ def train():
                 myfile.write(f'{episode},{step},{cum_reward},{c_loss/step},{a_loss/step},{act_frac[0]},{act_frac[1]},{a_lr},{c_lr}\n')
             
             # Print stuff in console
-            bg, colr = Style.RESET_ALL, Fore.GREEN if step >= 499 el Fore.RED
+            bg, colr = Style.RESET_ALL, Fore.GREEN if step >= 499 else Fore.RED
             print(f'Ep. {episode:4d} | ' \
                 + colr + f'Rw {cum_reward:7.2f} | Dur {step:5d}' + bg \
                 + f' | AL {a_loss/step:7.2f}' \

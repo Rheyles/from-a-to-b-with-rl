@@ -20,16 +20,16 @@ from params_PPO import *
 
 class ConvNet(nn.Module):
 
-    def __init__(self, obs:tuple, num_actions:int, n_filters=16, type='actor', dropout_rate=DROPOUT_RATE):
+    def __init__(self, obs:tuple, n_filters=16, num_actions=1, type='actor', dropout_rate=DROPOUT_RATE):
 
         super(ConvNet, self).__init__()
         img_shape = obs.shape[-2:] # Dim 0 will be reserved for the batch
         n_imgs = obs.shape[-3]
 
-        k1, k2, k3 = 4,2,1
-        s1, s2, s3 = 4,2,1
-        img_shape1 = [np.ceil((elem - (k1 - 1)) / (s1 * 2)).astype(int) for elem in img_shape]
-        img_shape2 = [np.ceil((elem - (k2 - 1)) / (s2 * 2)).astype(int) for elem in img_shape1]
+        k1, k2 = 4,2
+        s1, s2 = 4,2
+        img_shape1 = [(1 + (elem - k1) // (s1)) // 2 for elem in img_shape]
+        img_shape2 = [(1 + (elem - k2) // (s2)) // 2 for elem in img_shape1]
         n_linear = n_filters * 2 * np.prod(img_shape2) # Number of linear neurons when we flatten
         
         self.conv1 = nn.Sequential(
@@ -45,20 +45,23 @@ class ConvNet(nn.Module):
             nn.Dropout(p=dropout_rate))
         
         if type == 'actor': 
+            # We get the probabilities for each action
             self.dense = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(n_linear, n_linear // 4),
-                nn.ReLU(),
-                nn.Linear(n_linear // 4, num_actions),
-                nn.Softmax(dim=1)
-            )
+                    nn.Flatten(),
+                    nn.Linear(n_linear, n_linear // 4),
+                    nn.ReLU(),
+                    nn.Linear(n_linear // 4, num_actions),
+                    nn.Softmax(dim=1)
+                )
+            
         else:
+            # We get the estimation of the value of a state
             self.dense = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(n_linear, n_linear // 4),
-                nn.ReLU(),
-                nn.Linear(n_linear // 4, 1)
-            )        
+                    nn.Flatten(),
+                    nn.Linear(n_linear, n_linear // 4),
+                    nn.ReLU(),
+                    nn.Linear(n_linear // 4, 1)
+                )        
 
     def forward(self, x) -> torch.Tensor:
         x = self.conv1(x)
@@ -78,8 +81,11 @@ class PPOAgent():
                  L2_alpha=L2_ALPHA,
                  entropy_beta=ENTROPY_BETA,
                  buffer_size=BUFFER_SIZE,
+                 minibatch_size=MINIBATCH_SIZE
                  ):
         
+        super(PPOAgent, self).__init__()
+
         # Save some parameters of the model for later 
         self.n_imgs = n_imgs 
         self.n_idle = n_idle
@@ -87,6 +93,8 @@ class PPOAgent():
         self.action_space = env.action_space
         self.num_actions = env.action_space.n
         self.gamma = gamma
+        self.buffer_size = buffer_size
+        self.minibatch_size = minibatch_size
 
         # Preparing the agent observation and network
         self.current_obs = deque(maxlen=self.n_imgs) # This one is used to produce the "multi_image" observation
@@ -94,8 +102,9 @@ class PPOAgent():
             self.current_obs.append(state[:,:,1]/255)
         torch_obs = torch.tensor(np.array(self.current_obs), dtype=torch.float32).unsqueeze(0)
 
-        self.actor_net = ConvNet(torch_obs, num_actions=self.num_actions, n_filters=n_filters, type='actor')
-        self.critic_net = ConvNet(torch_obs, num_actions=self.num_actions, n_filters=n_filters, type='critic')
+        self.critic_net = ConvNet(torch_obs, n_filters=n_filters, type='critic')
+        self.actor_net = ConvNet(torch_obs, n_filters=n_filters, type='actor', num_actions=self.num_actions)
+
         self.actor_optimizer = torch.optim.AdamW(params=self.actor_net.parameters(), lr=actor_lr, weight_decay=L2_alpha)
         self.critic_optimizer = torch.optim.AdamW(params=self.critic_net.parameters(), lr=critic_lr, weight_decay=L2_alpha)
 
@@ -121,7 +130,6 @@ class PPOAgent():
              factor=SCHEDULER_FACTOR, 
              min_lr=SCHEDULER_MIN_LR, 
              patience=SCHEDULER_PATIENCE)
-    
 
     def step_idle(self, env:gym.Env, action:int | np.ndarray):
         """ A routine that plays n_idle steps from an environment with the same action. 
@@ -158,11 +166,13 @@ class PPOAgent():
         * does not select the action, just computes the probability associated to it if `action` is not None
         (action must have at least the first dimension equal to that of obs, by the way)
         """
-
+ 
         if isinstance(obs, np.ndarray):
-            obs = torch.Tensor(obs).unsqueeze(0)
+            torch_obs = torch.Tensor(obs).unsqueeze(0)
+        else:
+            torch_obs = obs
 
-        probs = self.actor_net.forward(obs)
+        probs = self.actor_net.forward(torch_obs)
         distrib = Categorical(probs)
         if action is None: 
             action = distrib.sample() if not deterministic else distrib.mode.unsqueeze(0)
@@ -173,21 +183,18 @@ class PPOAgent():
         return action, log_probs, entropy
 
    
-    def compute_est_state_values(self) -> torch.Tensor:
+    def est_state_values(self, torch_obs:torch.Tensor) -> torch.Tensor:
         """ Ask the critic to judge a state (estimates the V(s)) and the
-        next state (estimates the V(s')). You can specify if the episode
-        is terminated, in which case the value will automatically be
-        set to 0 """
+        next state (estimates the V(s'))."""
         
-        torch_obs = torch.cat(tuple(self.obs))
-        x = self.critic_net.forward(torch_obs)
-        return x
+        return self.critic_net(torch_obs)
     
 
-    def compute_true_state_values(self):
+    def true_state_values(self) -> torch.Tensor:
         """ Computes the true state value 
          that will be compared to what is estimated from 
-         the NN model to compute the critic loss"""
+         the NN model to compute the critic loss. 
+         So the way I code things means I am doing Monte Carlo sampling"""
         
         state_values = deque(maxlen=len(self.rewards)) # I use it because of precious .appendleft method
         state_values.append(0)
@@ -199,56 +206,83 @@ class PPOAgent():
 
         return torch.Tensor(np.array(state_values)).unsqueeze(-1)
     
-    def compute_advantage(self, detach=False, normalize=False):
-        """ Computes the critic advantage for PPO. 
-        Provides an option to detach the result and to normalise it (useful to give to the actor !)"""
-    
-        est_state_vals = self.compute_est_state_values()
-        true_state_vals = self.compute_true_state_values()
-        advantage = (true_state_vals - est_state_vals)
-
-        if normalize:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-9)
-
-        if detach: return advantage.detach()
-        return advantage
-    
 
     def update(self, n_epochs=UPDATE_EPOCHS, clip_val=PPO_CLIP_VAL):
         '''
-        Here I update both the critic net and the policy (actor) net at the same time
+        Here I update both the critic net and the policy (actor) net at the same time.
+        NOTE 1 : the mini_batching is a bit ugly
+        NOTE 2 : Somehow the advantage should _not_ be updated for the actor during update ? 
         '''
         
-        # These things remain constant for all epochs
+        # These things should not change throughout the epochs 
+        true_state_vals = self.true_state_values() 
+        torch_obs = torch.cat(tuple(self.obs))
         actions = torch.cat(tuple(self.actions)).unsqueeze(-1)
         log_probs = torch.cat(tuple(self.log_probs)).detach()
-        torch_obs = torch.cat(tuple(self.obs))
+        advantage = true_state_vals - self.est_state_values(torch_obs)  # Used for actor only
+        adv_normed = (advantage - advantage.mean()) \
+            / (1e-5 + advantage.std())  # Used for actor only
+        
+        critic_loss_record, actor_loss_record, entropy_loss_record = [],[],[]
 
         for _ in range(n_epochs):
-            advantage = self.compute_advantage()
-            detached_advantage = self.compute_advantage(detach=True, normalize=False)
-            _, new_log_probs, entropy = self.apply_policy(obs=torch_obs, action=actions)
-            raw_prob_ratio = torch.exp(new_log_probs - log_probs)
-            clipped_prob_ratio = torch.clip(raw_prob_ratio, 1 - clip_val, 1 + clip_val)
 
-            actor_loss = torch.maximum(-detached_advantage * raw_prob_ratio, \
-                                       -detached_advantage * clipped_prob_ratio).mean()
-            entropy_loss = torch.mean(entropy)
-            actor_loss = actor_loss + self.entropy_beta * entropy_loss
+            [obs_batches, actions_batches, log_probs_batches, adv_batches, tsv_batches] \
+                = minibatch(torch_obs, actions, log_probs, adv_normed, true_state_vals, split_length=self.minibatch_size)
 
-            critic_loss = (advantage ** 2).mean()
+            for obs_batch, actions_batch, log_probs_batch, adv_batch, tsv_batch in \
+                zip(obs_batches, actions_batches, log_probs_batches, adv_batches, tsv_batches):
+
+                # Actor part
+                _, new_log_probs_batch, entropy_batch = self.apply_policy\
+                    (obs=obs_batch, action=actions_batch)
+                
+                raw_prob_ratio = torch.exp(new_log_probs_batch - log_probs_batch)
+                clipped_prob_ratio = torch.clip(raw_prob_ratio, 1 - clip_val, 1 + clip_val)
+                actor_loss = torch.maximum \
+                    (-adv_batch.detach() * raw_prob_ratio, \
+                     -adv_batch.detach() * clipped_prob_ratio).mean()
+                entropy_loss = self.entropy_beta * entropy_batch.mean()
+                actor_loss += entropy_loss
+
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor_optimizer.step()
+
+                # # Critic part
+                esv_batch = self.est_state_values(obs_batch)
+                critic_loss = ((tsv_batch - esv_batch) ** 2).mean()
+
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic_optimizer.step()
+
+                actor_loss_record.append(actor_loss.item())
+                entropy_loss_record.append(entropy_loss.item())
+                critic_loss_record.append(critic_loss.item())
             
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            self.actor_optimizer.step()
-            
-            self.critic_optimizer.zero_grad()
-            critic_loss.backward()
-            self.critic_optimizer.step()
-            
-        return actor_loss, critic_loss, entropy_loss
+        return sum(actor_loss_record)/len(actor_loss_record), \
+            sum(critic_loss_record)/len(critic_loss_record), \
+            sum(entropy_loss_record)/len(entropy_loss_record)
 
 
+########################################
+# HELPER FUNCTIONS
+#########################################
+
+def minibatch(*args, 
+              split_length:int) -> list[torch.Tensor]:
+    """Shuffles the data buffer and splits it into mini-batches of size
+    `split_length`."""
+
+    out_vars = []
+    shuffled = torch.randperm(len(args[0]))
+    for arg in args:
+        if not isinstance(arg, torch.Tensor):
+            arg = torch.tensor(arg)
+        out_vars.append(torch.split(arg[shuffled],split_length))
+
+    return out_vars
 
 #########################################
 # TRAIN PROGRAMME
@@ -256,11 +290,11 @@ class PPOAgent():
 
 def train():
     
-    file_prefix = 'PPO_Carracing_' + datetime.now().strftime('%y-%m-%d_%H-%M')
+    file_prefix = 'PPO_Carracing_mb_' + datetime.now().strftime('%y-%m-%d_%H-%M')
 
     # Initialize Environment and agent
     env = gym.make("CarRacing-v2", continuous=False, render_mode='rgb_array')
-    env.metadata['render_fps'] = 150
+    env.metadata['render_fps'] = 300
     state, _ = env.reset()    
         
     # Introducing the agent in the field. We need the state (for its shape) to initialise the network
@@ -271,10 +305,10 @@ def train():
         obs = agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
     
     # Init some monitoring stuff
-    actor_lr = agent.actor_scheduler.optimizer.param_groups[0]['lr']    
-    critic_lr = agent.critic_scheduler.optimizer.param_groups[0]['lr']    
+    a_lr = agent.actor_scheduler.optimizer.param_groups[0]['lr']  
+    c_lr = agent.critic_scheduler.optimizer.param_groups[0]['lr']     
     cum_reward, actor_loss, critic_loss, entropy_loss = 0, 0, 0, 0
-    episode, steps, global_steps, iters_since_last_update = 0, 0, 0, 0
+    episode, steps, global_steps, iters_since_last_update = 0, N_START_SKIP, N_START_SKIP, 0
     done, actions, cum_rewards = False, [], []
     best_model_score = -np.inf
     time_start = time.time()
@@ -282,7 +316,7 @@ def train():
     try:
         # Init log file
         with open('./models/' + file_prefix + '_log.csv', 'w') as myfile:
-            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,epsilon,action_0,action_1,action_2,action_3,action_4,actor_lr, critic_lr\n')
+            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,e_loss,action_0,action_1,action_2,action_3,action_4,a_lr,c_lr\n')
 
         # Save hyperparameters now
         print('./models/' + file_prefix + '_prms.json')
@@ -322,8 +356,9 @@ def train():
                 actor_loss, critic_loss, entropy_loss \
                     = agent.update(n_epochs=UPDATE_EPOCHS)
                 agent.actor_scheduler.step(metrics=cum_reward)
-                actor_lr = agent.actor_scheduler.optimizer.param_groups[0]['lr']    
-                critic_lr = agent.critic_scheduler.optimizer.param_groups[0]['lr']
+                agent.critic_scheduler.step(metrics=cum_reward)
+                a_lr = agent.actor_scheduler.optimizer.param_groups[0]['lr']   
+                c_lr = agent.critic_scheduler.optimizer.param_groups[0]['lr'] 
                 
             # End of episode routine : collect episode info & write it down plus prepare next episode
             if done: 
@@ -336,7 +371,7 @@ def train():
                # Write some stuff in da file
                 with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
                     myfile.write(f'{episode},{steps},{time_now},{cum_reward},{actor_loss},{critic_loss},{entropy_loss},' \
-                                +f'{act_frac[0]},{act_frac[1]},{act_frac[2]},{act_frac[3]},{act_frac[4]},{actor_lr},{critic_lr}\n')
+                                +f'{act_frac[0]},{act_frac[1]},{act_frac[2]},{act_frac[3]},{act_frac[4]},{a_lr},{c_lr}\n')
                             
                 # Fancier colors for standard output
                 bg, colr = Style.RESET_ALL, Fore.RED
@@ -359,12 +394,12 @@ def train():
                     + f' | A2 {act_frac[2]:.2f}' \
                     + f' | A3 {act_frac[3]:.2f}' \
                     + f' | A4 {act_frac[4]:.2f}' \
-                    + f' | A_LR {actor_lr:5.2e}'\
-                    + f' | C_LR {critic_lr:5.2e}')
+                    + f' | A_LR {a_lr:5.2e}')
                 
                 # Reset variables for next episode 
                 state, _ = env.reset()
-                cum_reward, steps, done, actions = 0, 0, False, []
+                cum_reward, steps, done, actions = 0, N_START_SKIP, False, []
+                global_steps += N_START_SKIP
                 episode += 1
                 for _ in range(N_START_SKIP): 
                     action = 3
@@ -383,6 +418,7 @@ def train():
     finally:
         torch.save(agent.actor_net.state_dict(), './models/' + file_prefix + '_latest_actor.pkl')
         torch.save(agent.critic_net.state_dict(), './models/' + file_prefix + '_latest_critic.pkl')
+
 
 
 def evaluate(file, index=-1, mode='human'):
@@ -425,19 +461,24 @@ def evaluate(file, index=-1, mode='human'):
         env.start_video_recorder()
     
     for episode in range(5):
+
         cum_reward, step, done = 0, 0, False
         state, _ = env.reset()
-        state = agent.observe(state)
+        for _ in range(N_START_SKIP): 
+            action = 3
+            state, _, _, _, _ = env.step(action)    
+            obs = agent.observe(state) # Fills the observation deque and only works if N_START_SKIP > N_IMGS
         
         while not done:
-            action, _, _ = agent.apply_policy(state, deterministic=False) # Deterministic or not here, not sure ...
-            next_state, reward, terminated, truncated, _ = env.step(action.item())
-            next_state = agent.observe(next_state)
+
+            action, _, _ = agent.apply_policy(obs, deterministic=False) # Deterministic or not here, not sure ...
+            next_state, reward, terminated, truncated, jump_steps = agent.step_idle(env, action.item())
+            next_obs = agent.observe(next_state)
             done = terminated or truncated
 
-            state = next_state
+            obs = next_obs
             cum_reward += reward
-            step += 1
+            step += jump_steps
 
         cum_rewards.append(cum_reward)
         steps.append(step)

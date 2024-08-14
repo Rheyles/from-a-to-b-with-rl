@@ -1,5 +1,6 @@
-map = 4x4# Frozen Lake Maps : 4x4, 5x5_easy, 5x5_hard, 8x8
-continuous = false# For LunarLander, MountainCar, CarRace
+map = 4x4 # Frozen Lake Maps : 4x4, 5x5_easy, 5x5_hard, 8x8
+continuous = false # For LunarLander, MountainCar, CarRace
+ppo = false
 
 # Frozen Lake
 frozenlake:
@@ -69,21 +70,30 @@ endif
 
 # CarRacing
 carracing:
-ifeq ($(continuous),true)
-	python code/carracing/DQN_carracing_continuous.py --train
-	python code/carracing/DQN_carracing_continuous.py --eval
-else
+ifeq ($(continuous),true) # Can only be done with PPO
+	python code/carracing/PPO_carracing_continuous.py --train
+	python code/carracing/PPO_carracing_continuous.py --eval
+else 
 	@echo /!\\ Discrete CarRacing. Add 'continuous=true' at the end of the make command if you do not want a continuous model
-	python code/carracing/DQN_carracing.py --train
-	python code/carracing/DQN_carracing.py --eval
+	ifeq ($(ppo), true)
+		python code/carracing/PPO_carracing.py --train
+		python code/carracing/PPO_carracing.py --eval
+	else	
+		python code/carracing/DQN_carracing.py --train
+		python code/carracing/DQN_carracing.py --eval
+	endif
 endif
 
 carracing-train:
-ifeq ($(continuous),true)
-	python code/carracing/DQN_carracing_continuous.py --train
-else
+ifeq ($(continuous),true) # Can only be done with PPO
+	python code/carracing/PPO_carracing_continuous.py --train
+else 
 	@echo /!\\ Discrete CarRacing. Add 'continuous=true' at the end of the make command if you do not want a continuous model
-	python code/carracing/DQN_carracing.py --train
+	ifeq ($(ppo), true)
+		python code/carracing/PPO_carracing.py --train
+	else	
+		python code/carracing/DQN_carracing.py --train
+	endif
 endif
 
 carracing-eval:
