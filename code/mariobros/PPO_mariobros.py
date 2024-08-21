@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from nes_py.wrappers import JoypadSpace
-from gym_super_mario_bros.actions import COMPLEX_MOVEMENT
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT, COMPLEX_MOVEMENT
 from collections import deque
 from datetime import datetime
 from colorama import Fore, Style
@@ -304,7 +304,7 @@ def train():
     # Here we have to adapt our code a bit since Super Mario works with an 
     # old Gym environment while our version of Gym is recent
     env = gym.make("SuperMarioBrosRandomStages-v0", 
-                   stages=['1-1','2-1','4-1','5-1', '2-3', '1-3'])
+                   stages=STAGES)
     steps = env._max_episode_steps  # get the original max_episode_steps count
     env = JoypadSpace(env.env, COMPLEX_MOVEMENT)  # set the joypad wrapper
     def gymnasium_reset(self, **kwargs):
@@ -313,7 +313,7 @@ def train():
     # overwrite the old reset to accept `seeds` and `options` args
     env.reset = gymnasium_reset.__get__(env, JoypadSpace)  
     env = TimeLimit(StepAPICompatibility(env, output_truncation_bool=True), max_episode_steps=steps) 
-    env.metadata['render_fps'] = 150
+    env.metadata['render_fps'] = 500
     state = env.reset()    
         
     # Introducing the agent in the field. We need the state (for its shape) to initialise the network
@@ -335,7 +335,7 @@ def train():
     try:
         # Init log file
         with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
-            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,epsilon,action_0,action_1,action_2,action_3,action_4,actor_lr, critic_lr\n')
+            myfile.write(f'episode,step,time,cum_reward,a_loss,c_loss,epsilon,actor_lr, critic_lr\n')
 
         # Save hyperparameters now
         print('./models/' + file_prefix + '_prms.json')
@@ -352,7 +352,7 @@ def train():
             next_state, reward, terminated, truncated, n_idle \
                 = agent.step_idle(env, action.item()) # Agent slacks off a bit ...
             done = terminated or truncated
-            env.render()
+            # env.render()
 
             # Update thingies
             agent.actions.append(action)
@@ -389,8 +389,7 @@ def train():
                 
                # Write some stuff in da file
                 with open('./models/' + file_prefix + '_log.csv', 'a') as myfile:
-                    myfile.write(f'{episode},{steps},{time_now},{cum_reward},{actor_loss},{critic_loss},{entropy_loss},' \
-                                +f'{act_frac[0]},{act_frac[1]},{act_frac[2]},{act_frac[3]},{act_frac[4]},{actor_lr},{critic_lr}\n')
+                    myfile.write(f'{episode},{steps},{time_now},{cum_reward},{actor_loss},{critic_loss},{entropy_loss},{actor_lr},{critic_lr}\n')
                             
                 # Fancier colors for standard output
                 bg, colr = Style.RESET_ALL, Fore.RED
@@ -404,11 +403,6 @@ def train():
                     + f' | A_LOSS {actor_loss:+5.2e}' \
                     + f' | C_LOSS {critic_loss:6.2f}' \
                     + f' | E_LOSS {entropy_loss:5.2f}' \
-                    + f' | A0 {act_frac[0]:.2f}' \
-                    + f' | A1 {act_frac[1]:.2f}' \
-                    + f' | A2 {act_frac[2]:.2f}' \
-                    + f' | A3 {act_frac[3]:.2f}' \
-                    + f' | A4 {act_frac[4]:.2f}' \
                     + f' | A_LR {actor_lr:5.2e}'\
                     + f' | C_LR {critic_lr:5.2e}')
                 
@@ -434,11 +428,6 @@ def train():
 
 
 
-
-
-
-
-
 def evaluate(file, index=-1, mode='human'):
     """ Evaluates a trained model (default : the best version of the last trained model)"""
 
@@ -452,7 +441,7 @@ def evaluate(file, index=-1, mode='human'):
         prms = json.load(myfile)
     
     env = gym.make("SuperMarioBrosRandomStages-v0", 
-                   stages=['1-1','2-1','4-1','5-1', '2-3', '1-3'])
+                   stages=STAGES)
     steps = env._max_episode_steps  # get the original max_episode_steps count
     env = JoypadSpace(env.env, COMPLEX_MOVEMENT)  # set the joypad wrapper
     def gymnasium_reset(self, **kwargs):
@@ -461,7 +450,7 @@ def evaluate(file, index=-1, mode='human'):
     # overwrite the old reset to accept `seeds` and `options` args
     env.reset = gymnasium_reset.__get__(env, JoypadSpace)  
     env = TimeLimit(StepAPICompatibility(env, output_truncation_bool=True), max_episode_steps=steps) 
-    env.metadata['render_fps'] = 30
+    env.metadata['render_fps'] = 50
     state = env.reset()    
 
     if mode != 'human': 
@@ -482,7 +471,7 @@ def evaluate(file, index=-1, mode='human'):
 
     done, action = False, -1
     cum_rewards, steps = [], []
-    state, _ = env.reset()
+    state = env.reset()
 
     if mode != 'human': 
         env.start_video_recorder()
@@ -490,7 +479,7 @@ def evaluate(file, index=-1, mode='human'):
     for episode in range(5):
 
         cum_reward, step, done = 0, 0, False
-        state, _ = env.reset()
+        
         for _ in range(N_START_SKIP): 
             action = 3
             state, _, _, _, _ = env.step(action)    
@@ -506,9 +495,11 @@ def evaluate(file, index=-1, mode='human'):
             obs = next_obs
             cum_reward += reward
             step += jump_steps
+            env.render()
 
         cum_rewards.append(cum_reward)
         steps.append(step)
+        state = env.reset()
     
     # Close the environment
     if mode != 'human':
@@ -520,7 +511,7 @@ def evaluate(file, index=-1, mode='human'):
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and ('--eval' in sys.argv[1] or '-e' in sys.argv[1]):
-        file = 'DQN_CarRacing' 
+        file = 'PPO_MarioBros_' 
         print(file)
         if len(sys.argv) > 2:
             file += sys.argv[2]

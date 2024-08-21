@@ -3,13 +3,14 @@ MAX_STEPS = 5_000_000 # Note : if N_IDLE is not 1, we will collect info only on 
 N_IMGS = 3 # Number of successive images that will make up the observation
 N_IDLE = 3 # Number of successive frames / steps during which agent will keep the same action (and ignore the next states) but still reap the rewards
 N_START_SKIP = 3 # Number of frames to skip at the beginning of the episode / please choose it to be higher than N_IMGS !
+STAGES=['1-1', '2-1', '3-1', '3-2', '4-1','5-1', '6-1', '7-1'] # Mario levels to be played
 
 # Neural Network parameters
 GAMMA = 0.95 # GAMMA is the discount factor of long-term reward
-N_FILTERS = 24 # The size of the neural network
+N_FILTERS = 48 # The size of the neural network
 DROPOUT_RATE = 0
-ACTOR_LR = 1e-2
-CRITIC_LR = 1e-2
+ACTOR_LR = 1e-3
+CRITIC_LR = 1e-3
 L2_ALPHA = 0
 SCHEDULER_PATIENCE = 200
 SCHEDULER_MIN_LR = 3e-5

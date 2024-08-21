@@ -1,5 +1,5 @@
 # Agent tweaks
-MAX_STEPS = 1_500_000 # Note : if N_IDLE is not 1, we will collect info only on some of these steps
+MAX_STEPS = 2_500_000 # Note : if N_IDLE is not 1, we will collect info only on some of these steps
 N_IMGS = 3 # Number of successive images that will make up the observation
 N_IDLE = 3 # Number of successive frames / steps during which agent will keep the same action (and ignore the next states) but still reap the rewards
 N_START_SKIP = 30 # Number of frames to skip at the beginning of the episode / please choose it to be higher than N_IMGS !
@@ -19,8 +19,6 @@ SCHEDULER_FACTOR = 0.5
 BUFFER_SIZE = 2000 # Update networks every xxxx steps
 MINIBATCH_SIZE = 64 # Size of the mini batches used during optimization step (BUFFER_SIZE / MINIBATCH_SIZE steps will be taken to make one epoch)
 UPDATE_EPOCHS = 5 # Number of epochs to use when learning and updating the policy
-ENTROPY_BETA = 0.0003
-ENTROPY_BETA = 0.0003
 ENTROPY_BETA = 0.0003
 PPO_CLIP_VAL = 0.2
 

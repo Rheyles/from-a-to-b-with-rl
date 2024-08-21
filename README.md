@@ -8,6 +8,7 @@ This repository is the two-week project in Data Science of four people from `le 
   - [Car Racing](#car-racing)
   - [Mountain car - only continuous](#mountain-car---only-continuous)
   - [Lunar Lander](#lunar-lander)
+  - [Super Mario Bros](#super-mario-bros)
 - [Algorithms](#algorithms)
   - [Some mathematical definitions](#some-mathematical-definitions)
   - [Q-learning](#q-learning)
@@ -41,12 +42,14 @@ This repository is the two-week project in Data Science of four people from `le 
     - [DQN, discrete case](#dqn-discrete-case)
     - [A2C, continuous case](#a2c-continuous-case)
     - [PPO, discrete case](#ppo-discrete-case)
+    - [PPO, continuous case](#ppo-continuous-case)
   - [Results on MountainCar continuous](#results-on-mountaincar-continuous)
   - [LunarLander](#lunarlander)
     - [A2C, discrete case](#a2c-discrete-case)
       - [Critic network](#critic-network)
       - [Actor network](#actor-network)
     - [A2C, continuous case](#a2c-continuous-case-1)
+  - [Super Mario Bros](#super-mario-bros-1)
 
 
 
@@ -153,6 +156,34 @@ In this environment :
 * **Termination** occurs when the lander crashes, gets outside of the field of view, or reaches "not awake" states. 
 
 **Continuous variant**: It is possible, as in [Car Racing](#car-racing-️), to make a _continuous_ variant of this environment, in which case we get two actions, one for the main engine (from -1 to 1) and one for the side engines (again from -1 to 1). [As mentioned in the official docs](https://gymnasium.farama.org/environments/box2d/lunar_lander/#arguments), the sign of the side engine action will determine _which_ lateral booster is used. 
+
+### Super Mario Bros 
+
+<p align="center"> <img src="readme_assets/mario_bros.gif" align="center"> </p>
+
+The celebrated video game has been adapted as a Gym environment. 
+
+* We are playing with the original environment, i.e. **the observations are the original 256 x 240 pixel images**. 
+
+* **The NES console has, in theory, $2^8 = 256$ possible actions**, combinations of one or more of the controller buttons : `left`, `right`, `up`, `down`, `A` (jump), `B` (hold to sprint),`Select` and `Start`. In practice, some combinations cannot be performed with a regular NES controller (such as `left` and `right`), so the environment provides [dictionaries for relevant movements adapted to Mario Bros](https://github.com/Kautenja/gym-super-mario-bros/blob/master/gym_super_mario_bros/actions.py) with various degrees of complexity. **We go with the `SIMPLE_MOVEMENT` dictionary, which allows the following actions** : 
+
+  ```python
+  SIMPLE_MOVEMENT = [
+      ['NOOP'], # Do nothing
+      ['right'],
+      ['right', 'A'],
+      ['right', 'B'],
+      ['right', 'A', 'B'],
+      ['A'],
+      ['left'],
+  ]
+  ```
+
+* Since we do not want the agent to overfit the exact level layouts (rather, we want the agent to learn how to play the actual game), **we randomize the levels**, but we decide to go with overground levels only, i.e. our selection consists of levels `['1-1', '2-1', '3-1', '3-2', '4-1','5-1', '6-1', '7-1']`.
+
+* **Mario is rewarded by going to the right** ($\delta x > 0$ leads to a positive reward), **penalized** for being idle (one clock ticks provide a negative reward of -1), and **penalized** for dying (reward -15).
+
+* In our configuration, **an episode ends when Mario dies** or **when they clear the random level**. 
 
 ## Algorithms
 
@@ -598,6 +629,13 @@ The proximal policy agent was coded to learn relatievly slowly and to achieve ma
 
 <p align="center"><img src="readme_assets/carracing_ppo_training.png", width=530></p>
 
+
+#### PPO, continuous case
+
+In this -- more complex -- case, a lot of episodes were needed and a slightly larger convolutional network was used to achieve decent performance. The resulting agent drives very fast -- a bit too fast -- and usually struggles with hairpins and sharp turns, sometimes leading to the car driving the "wrong" way. The fast and reckless driving also leads to unwanted drifting and spontaneous car reversing. It is possible that the car cannot "stabilise" itself due to the number of frames (3) during which we perform the same action before selecting another one. Nevertheless, the agent performance is quite satisfactory.
+
+<p align="center"><img src="readme_assets/carracing_ppo_continuous_training.png", width=530></p>
+
 ### Results on MountainCar continuous
 
 We only tried A2C algorithms on MountainCar continuous. Due to the sparsity of the reward, we never managed to consistently reach the goal and our agent usually ended up doing nothing to aim for a zero reward. This is very similar to what most people are getting online. 
@@ -632,4 +670,6 @@ Limiting the size of the network helps limit "unlearning",but surprisingly enoug
 #### A2C, continuous case
 
 The continuous case proved particularly challenging, and we never really managed to exceed ~0 in terms of cumulative rewards for a single episode. It seems that `stable-baselines3` with the `RL-zoo3` fine-tuned hyperparameters manages to get around 100-150 on average. Hence, it seems that A2C cannot really solve LunarLander in the continuous case. 
+
+### Super Mario Bros 
 

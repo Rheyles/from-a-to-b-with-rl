@@ -455,7 +455,6 @@ def evaluate(file, index=-1, mode='human'):
     
     env = gym.make('CarRacing-v2', continuous=True, render_mode=mode)
     env.metadata['render_fps'] = 30
-    state, _ = env.reset()
 
     if mode != 'human': 
         env = gym.wrappers.RecordVideo(env=env, 
@@ -483,7 +482,7 @@ def evaluate(file, index=-1, mode='human'):
     for episode in range(5):
 
         cum_reward, step, done = 0, 0, False
-        state, _ = env.reset()
+
         for _ in range(N_START_SKIP): 
             action = np.array([0,1,0])
             state, _, _, _, _ = env.step(action)    
@@ -503,6 +502,7 @@ def evaluate(file, index=-1, mode='human'):
 
         cum_rewards.append(cum_reward)
         steps.append(step)
+        state, _ = env.reset()
     
     # Close the environment
     if mode != 'human':
