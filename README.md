@@ -270,7 +270,7 @@ $$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma Q^{\rm est}(s _{t+1},a _{
 
 When we minimise that loss, we become _better_ at predicting the reward we get, since we are continuously 'injecting some truth' (the $r_t$) into it. Let's consider a series of actions and rewards $(a_t, r_t)$ and rewrite our loss in terms of $V^{\rm est}$ : 
 
-$$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma \left [ r_ {t+1} + \gamma V^{\rm est}(s _{t+2}) \right ] - r_t - \gamma V^{\rm est}(s _ {t+1}) \right \vert ^2  $$
+$$ \mathcal{L}_{\rm critic} = \left \vert r_t + \gamma \left [ r _ {t+1} + \gamma V^{\rm est}(s _ {t+2}) \right ] - r_t - \gamma V^{\rm est}(s _ {t+1}) \right \vert ^2  $$
 
 Rearranging some elements, we end up with :
 
