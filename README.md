@@ -292,7 +292,7 @@ You would think that after all these improvements and tweaks, _any_ problem woul
 
 Remember the actor loss in the A2C algorithm -- the inverse of its gain $\mathcal{G} _ {actor}$ :
 
-$$ \mathcal{L} _ {actor} = - \log \pi(s,a) \, A^{\rm est}(s,a)$$
+$$ \mathcal{L} _ {actor} = - \log \pi(s,a) ~ A^{\rm est}(s,a)$$
 
 For now, there is no notion of policy change in the loss of the actor, so we don't really know how different the new policy will be compared to the old policy. One way to remediate this is to change the loss to include the probabilities associated with a previous policy :
 
@@ -316,7 +316,7 @@ $$\mathcal{L}^{\rm PPO} = {\rm max} \left [- \Upsilon A^{\rm est}, - \overline{\
 
 Note that I use the _opposite_ of the objective function used in most texts :  $\mathcal{L}^{\rm PPO} = - \mathcal{L}^{\rm CLIP}$. I have also defined the $\epsilon$-clipped version of $\Upsilon$ as follows :
 
-$$\left \{ \begin{array}{rll}  \overline{\Upsilon} _ \epsilon &= 1 - \epsilon &\text{ for } \Upsilon \leq 1 - \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= \Upsilon & \text{ for }  1 - \epsilon  < \Upsilon < 1 + \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= 1 + \epsilon &\text{ for } \Upsilon \geq 1 + \epsilon \end{array} \right .$$
+$$\left \lbrace \begin{array}{rll}  \overline{\Upsilon} _ \epsilon &= 1 - \epsilon &\text{ for } \Upsilon \leq 1 - \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= \Upsilon & \text{ for }  1 - \epsilon  < \Upsilon < 1 + \epsilon \\\\ \overline{\Upsilon} _ \epsilon &= 1 + \epsilon &\text{ for } \Upsilon \geq 1 + \epsilon \end{array} \right .$$
 
 #### Dealing with the critic in PPO
 
